@@ -24,6 +24,7 @@
 #include <vector>
 #include <sys/sysinfo.h>
 #include <cstdlib>
+#include <cstring>
 
 #include <rte_eal.h>
 #include <rte_debug.h>
@@ -46,6 +47,7 @@ private:
 	unsigned int m_socket_id;
 	int rx_queues;
 	int tx_queues;
+	uint8_t mac_addr[6];
 	
 public:
 	int init(int num_queues);
@@ -62,11 +64,7 @@ uint16_t ports_ids[RTE_MAX_ETHPORTS];
 
 static struct rte_eth_conf port_conf_default = {
 	.rxmode = {
-		.mq_mode = ETH_MQ_RX_NONE,
         	.max_rx_pkt_len = ETHER_MAX_LEN
-	},
-	.txmode = {
-		.mq_mode = ETH_MQ_TX_NONE,
 	},
 };
 
@@ -103,6 +101,8 @@ void Port::send(int count)
 			hdr->d_addr.addr_bytes[4] = 0x31;
 			hdr->d_addr.addr_bytes[5] = 0x09;
 		}
+
+		memcpy(hdr->s_addr.addr_bytes, mac_addr, 6);
 
 		/* IPv4 */
 		hdr->ether_type = 0x0800;
@@ -143,6 +143,7 @@ int Port::init(int num_queues) {
 
 	m_socket_id = rte_eth_dev_socket_id(m_port_id);
 
+	memcpy(mac_addr, rte_eth_devices[m_port_id].data->mac_addrs->addr_bytes, 6);
 
 	pool = mempools_vector[m_socket_id];
 	
