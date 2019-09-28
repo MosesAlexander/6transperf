@@ -5,7 +5,7 @@
 APP = main
 CC = g++
 # all source are stored in SRCS-y
-SRCS-y := ../main.cpp
+SRCS-y := ../main.cpp ../port.cpp
 
 # Build using pkg-config variables if possible
 $(shell pkg-config --exists libdpdk)

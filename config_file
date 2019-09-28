@@ -1,0 +1,4 @@
+port0_mac_self=10:4a:fd:21:ff:a1
+port1_mac_self=11:4a:fd:21:ff:a1
+port0_mac_peer=20:4a:fd:21:ff:a1
+port1_mac_peer=21:4a:fd:21:ff:a1
