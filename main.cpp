@@ -74,9 +74,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	PortConfig *port0_config = new PortConfig("./config_file", 0);
-	PortConfig *port1_config = new PortConfig("./config_file", 1);
-
 	num_sockets = rte_socket_count();
 
 	for (int i = 0; i < num_sockets; i++) {
@@ -95,7 +92,20 @@ int main(int argc, char **argv)
 	for (int i = 0; i < num_ports; i++)
 	{
 		Port *port = new Port(i);
-		port->init(1);
+		PortConfig *port_config = new PortConfig("./config_file", i, TESTER_CONFIG);
+		port->init(1, port_config);
+		cout << "Port " << i << " mac address: "<< std::hex << std::setfill('0') << std::setw(2)
+							<< (unsigned int)port->mac_addr[0] << ":"
+							<< std::hex << std::setfill('0') << std::setw(2)
+							<< (unsigned int)port->mac_addr[1] << ":"
+							<< std::hex << std::setfill('0') << std::setw(2)
+							<< (unsigned int)port->mac_addr[2] << ":"
+							<< std::hex << std::setfill('0') << std::setw(2)
+							<< (unsigned int)port->mac_addr[3] << ":"
+							<< std::hex << std::setfill('0') << std::setw(2)
+							<< (unsigned int)port->mac_addr[4] << ":"
+							<< std::hex << std::setfill('0') << std::setw(2)
+							<< (unsigned int)port->mac_addr[5] << endl;
 		ports_vector.push_back(port);
 	}
 
