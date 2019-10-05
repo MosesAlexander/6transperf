@@ -18,8 +18,16 @@
 
 
 #include "port.h"
+#include "tester.h"
+#include "b4.h"
+#include "router.h"
+#include "aftr.h"
 
 using namespace std;
+
+config_type_t op_mode = TESTER_CONFIG; // tester config is default
+
+Router *router;
 
 static void signal_handler(int signum)
 {
@@ -38,10 +46,18 @@ static void signal_handler(int signum)
 int
 traffic_lcore_thread(void *arg __rte_unused)
 {
-	int socket_id = rte_socket_id();
-	Port *port = ports_vector[socket_id];
-
-	port->send(10);
+	switch (op_mode)
+	{
+	case TESTER_CONFIG:
+		dynamic_cast<DSLiteTester*>(router)->testb4();
+		break;
+	case B4_CONFIG:
+		dynamic_cast<DSLiteB4Router*>(router)->forward();
+		break;
+	case AFTR_CONFIG:
+		//TODO
+		break;
+	}
 }
 
 int main(int argc, char **argv)
@@ -50,6 +66,8 @@ int main(int argc, char **argv)
 	uint16_t port_id;
 	int lcore_id;
 	int transperf_logtype;
+	vector<Port*> ports_vector;
+	uint64_t ports_lcore_mask[2];
 
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
@@ -65,22 +83,57 @@ int main(int argc, char **argv)
 
 	for (int i = 1 ; i < argc; i++)
 	{
-		int arg;
-
 		if (argv[i] == string("--num-ports"))
 		{
+			int arg;
 			arg = atoi(argv[i+1]);
 			num_ports = arg;
+		}
+
+		if (argv[i] == string("--mode"))
+		{
+			if (string(argv[i+1]) == string("b4"))
+			{
+				op_mode = B4_CONFIG;
+				router = new DSLiteB4Router();
+
+			}
+
+			if (string(argv[i+1]) == string("aftr"))
+			{
+				op_mode = AFTR_CONFIG;
+				router = new DSLiteAFTRRouter();
+			}
+
+			if (string(argv[i+1]) == string("tester"))
+			{
+				op_mode = TESTER_CONFIG;
+				router = new DSLiteTester();
+			}
+		}
+
+		if (argv[i] == string("--port0-lcoremask"))
+		{
+			ports_lcore_mask[0] = stoull(string(argv[i+1]));
+		}
+
+		if (argv[i] == string("--port1-lcoremask"))
+		{
+			ports_lcore_mask[1] = stoull(string(argv[i+1]));
 		}
 	}
 
 	num_sockets = rte_socket_count();
+	//TODO: Must support more lcores than 64
+	router->port0_lcore_mask = ports_lcore_mask[0];
+	router->port1_lcore_mask = ports_lcore_mask[1];
+	router->set_lcore_allocation(ports_lcore_mask[0], ports_lcore_mask[1]);
 
 	for (int i = 0; i < num_sockets; i++) {
 		string pool_name = string("pool_");
 		pool_name = pool_name + to_string(i);
 		struct rte_mempool *pool = rte_pktmbuf_pool_create(pool_name.c_str(),
-								NUM_BUFFERS, RTE_CACHE_LINE_SIZE,
+								NUM_BUFFERS, MEMPOOL_CACHE_SIZE,
 						0, RTE_MBUF_DEFAULT_BUF_SIZE, i);
 		if (pool == nullptr)
 			rte_exit(EXIT_FAILURE, "Failed to init memory pool\n");
@@ -92,7 +145,7 @@ int main(int argc, char **argv)
 	for (int i = 0; i < num_ports; i++)
 	{
 		Port *port = new Port(i);
-		PortConfig *port_config = new PortConfig("./config_file", i, TESTER_CONFIG);
+		PortConfig *port_config = new PortConfig("./config_file", i, op_mode);
 		port->init(1, port_config);
 		cout << "Port " << i << " mac address: "<< std::hex << std::setfill('0') << std::setw(2)
 							<< (unsigned int)port->mac_addr[0] << ":"
@@ -106,7 +159,8 @@ int main(int argc, char **argv)
 							<< (unsigned int)port->mac_addr[4] << ":"
 							<< std::hex << std::setfill('0') << std::setw(2)
 							<< (unsigned int)port->mac_addr[5] << endl;
-		ports_vector.push_back(port);
+
+		router->add_port(port);
 	}
 
 	rte_eal_mp_remote_launch(traffic_lcore_thread, NULL, SKIP_MASTER);

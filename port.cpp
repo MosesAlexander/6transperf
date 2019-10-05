@@ -9,7 +9,6 @@ const uint16_t NUM_BUFFERS = 1024;
 
 unsigned int num_sockets;
 vector<struct rte_mempool *> mempools_vector;
-vector<Port*> ports_vector;
 
 uint16_t ports_ids[RTE_MAX_ETHPORTS]; 
 
@@ -19,96 +18,6 @@ static struct rte_eth_conf port_conf_default = {
 	},
 };
 
-void Port::construct_ip_packet(char *buf, int buf_len)
-{
-	struct ether_hdr *hdr;
-	uint16_t *ptr16;
-	uint32_t ip_cksum;
-	uint16_t data_len = buf_len - sizeof(struct ether_hdr) - sizeof(struct ipv4_hdr);
-	uint16_t pkt_len;
-	struct ipv4_hdr *ip_hdr;
-	struct udp_hdr *udp_hdr;
-
-	hdr = (struct ether_hdr *)buf;
-	ip_hdr = (struct ipv4_hdr *)(buf+(sizeof(struct ether_hdr)));
-	udp_hdr = (struct udp_hdr *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv4_hdr)));
-
-	memcpy(hdr->d_addr.addr_bytes, m_config->peer_mac,6);
-	memcpy(hdr->s_addr.addr_bytes, mac_addr, 6);
-
-	/* IPv4 */
-	hdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
-
-	/* IPv4 header */
-	pkt_len = (uint16_t) (data_len + sizeof(struct ipv4_hdr)); // data + ip header
-	ip_hdr->version_ihl   = IP_VHL_DEF;
-	ip_hdr->type_of_service   = 0;
-	ip_hdr->fragment_offset = 0;
-	ip_hdr->time_to_live   = IP_DEFTTL;
-	ip_hdr->next_proto_id = IPPROTO_UDP;
-	ip_hdr->packet_id = 0;
-	ip_hdr->total_length   = rte_cpu_to_be_16(pkt_len);
-	ip_hdr->src_addr = rte_cpu_to_be_32(m_config->self_ip4);
-	ip_hdr->dst_addr = rte_cpu_to_be_32(m_config->dest_ip4);
-
-	/*
-	 * Compute IP header checksum.
-	 */
-	ptr16 = (unaligned_uint16_t*) ip_hdr;
-	ip_cksum = 0;
-	ip_cksum += ptr16[0]; ip_cksum += ptr16[1];
-	ip_cksum += ptr16[2]; ip_cksum += ptr16[3];
-	ip_cksum += ptr16[4];
-	ip_cksum += ptr16[6]; ip_cksum += ptr16[7];
-	ip_cksum += ptr16[8]; ip_cksum += ptr16[9];
-
-	/*
-	 * Reduce 32 bit checksum to 16 bits and complement it.
-	 */
-	ip_cksum = ((ip_cksum & 0xFFFF0000) >> 16) +
-		(ip_cksum & 0x0000FFFF);
-	if (ip_cksum > 65535)
-		ip_cksum -= 65535;
-	ip_cksum = (~ip_cksum) & 0x0000FFFF;
-	if (ip_cksum == 0)
-		ip_cksum = 0xFFFF;
-	ip_hdr->hdr_checksum = (uint16_t) ip_cksum;
-
-	// Add some udp payload, we won't really care about this, unless
-	// we want to add some random data here and checksum it to test
-	// for data integrity between the NICs
-	udp_hdr->src_port = rte_cpu_to_be_16(1024);
-	udp_hdr->dst_port = rte_cpu_to_be_16(1024);
-	udp_hdr->dgram_len      = rte_cpu_to_be_16(data_len);
-	udp_hdr->dgram_cksum    = 0; /* No UDP checksum. */
-}
-
-void Port::send(int count)
-{
-	for (;;) {
-		struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[m_port_id]);
-		struct rte_mbuf *pktsbuf[1];
-		char *buf = rte_pktmbuf_append(pktmbuf, ETH_SIZE_1024);
-
-		construct_ip_packet(buf, ETH_SIZE_1024);
-
-		pktsbuf[0] = pktmbuf;
-
-		/* Send burst of TX packets, to second port of pair. */
-		uint16_t nb_tx = rte_eth_tx_burst(m_port_id, 0, pktsbuf, 1);
-		rte_pktmbuf_free(pktsbuf[0]);
-		/* Free any unsent packets. */
-		/*
-		if (unlikely(nb_tx < nb_rx)) {
-		    uint16_t bufno;
-		    for (bufno = nb_tx; bufno < nb_rx; bufno++)
-		}
-		*/
-
-		rte_delay_ms(2000);
-	}
-
-}
 
 
 // TODO: Calculate number of queues according to number of lcores
@@ -218,7 +127,7 @@ void PortConfig::SetIp(string &line, bool self)
 	for(int i = 0; i < tokens.size(); i++) 
 		cout << tokens[i] << '\n'; 
 
-	// token[1] should contain the mac adress
+	// token[1] should contain the ip adress
 	stringstream check2(tokens[1]);
 	while(getline(check2, intermediate, '.'))
 	{
@@ -237,7 +146,38 @@ void PortConfig::SetIp(string &line, bool self)
 }
 
 void PortConfig::SetIp6(string &line, bool self)
-{ }
+{
+	vector<string> tokens; 
+	stringstream check1(line); 
+	string intermediate; 
+	int ip_block = 0;
+	uint16_t *ip6_addr;
+
+	if (self) {
+		ip6_addr = (uint16_t *) self_ip6;
+	} else {
+		ip6_addr = (uint16_t *) dest_ip6;
+	}
+
+	memset(ip6_addr, 0, 8 * sizeof(uint16_t));
+
+	while(getline(check1, intermediate, '=')) 
+	{ 
+		tokens.push_back(intermediate); 
+	} 
+
+	for(int i = 0; i < tokens.size(); i++) 
+		cout << tokens[i] << '\n'; 
+
+	// token[1] should contain the ip6 address
+	stringstream check2(tokens[1]);
+	while(getline(check2, intermediate, ':') && ip_block < 8)
+	{
+		ip6_addr[ip_block] = rte_cpu_to_be_16(static_cast<uint16_t>(std::stoul(intermediate, nullptr, 16)));
+
+		ip_block++;
+	}
+}
 
 PortConfig::PortConfig(char *config_file, int port, config_type_t config_type)
 {
@@ -281,6 +221,10 @@ PortConfig::PortConfig(char *config_file, int port, config_type_t config_type)
 					SetIp6(line, false);
 			}
 
+			if (line.find("tunnel")!=string::npos)
+				if(line.find("=yes")!=string::npos)
+					is_ipip6_tun_intf = true;
+
 			cout << line << endl;
 		}
 		else if ((line.find("port1")!=string::npos) && port == 1)
@@ -301,6 +245,10 @@ PortConfig::PortConfig(char *config_file, int port, config_type_t config_type)
 				else if (line.find("_ip6_")!=string::npos)
 					SetIp6(line, false);
 			}
+
+			if (line.find("tunnel")!=string::npos)
+				if(line.find("=yes")!=string::npos)
+					is_ipip6_tun_intf = true;
 
 			cout << line << endl;
 		}

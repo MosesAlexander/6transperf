@@ -1,3 +1,6 @@
+#ifndef PORT_H
+#define PORT_H
+
 #include <iostream>
 #include <csignal>
 #include <unistd.h>
@@ -29,6 +32,8 @@ extern uint16_t ports_ids[RTE_MAX_ETHPORTS];
 extern const uint16_t RX_RING_SIZE;
 extern const uint16_t TX_RING_SIZE;
 extern const uint16_t NUM_BUFFERS;
+
+
 #define ETH_SIZE_64 64
 #define ETH_SIZE_128 128
 #define ETH_SIZE_256 256
@@ -42,6 +47,21 @@ extern const uint16_t NUM_BUFFERS;
 #define IP_VERSION 0x40
 #define IP_HDRLEN  0x05 /* default IP header length == five 32-bits words. */
 #define IP_VHL_DEF (IP_VERSION | IP_HDRLEN)
+#define MEMPOOL_CACHE_SIZE 32
+
+#define MAX_PKT_BURST 512
+
+/*
+ * Default byte size for the IPv6 Maximum Transfer Unit (MTU).
+ * This value includes the size of IPv6 header.
+ */
+#define IPV4_MTU_DEFAULT        ETHER_MTU
+#define IPV6_MTU_DEFAULT        ETHER_MTU
+/*
+ * Default payload in bytes for the IPv6 packet.
+ */
+#define IPV4_DEFAULT_PAYLOAD    (IPV4_MTU_DEFAULT - sizeof(struct ipv4_hdr))
+#define IPV6_DEFAULT_PAYLOAD    (IPV6_MTU_DEFAULT - sizeof(struct ipv6_hdr))
 
 
 enum config_type_t {
@@ -56,11 +76,14 @@ public:
         PortConfig(char *config_file, int port, config_type_t config_type);
         uint8_t self_mac[6];
         uint8_t peer_mac[6];
+	// IPv4 is stored in host byte order
 	uint32_t self_ip4;
 	uint32_t dest_ip4;
-	uint64_t self_ip6;
-	uint64_t dest_ip6;
-	bool is_ipip6_tun_intf;
+	// IPv6 is stored in network byte order
+	uint8_t self_ip6[16];
+	uint8_t dest_ip6[16];
+	uint64_t lcore_mask = 0;
+	bool is_ipip6_tun_intf = false;
 private:
 	void SetMac(string &line, bool self);
 	void SetIp(string &line, bool self);
@@ -69,7 +92,7 @@ private:
 
 class Port
 {
-private:
+public:
 	bool m_initialized = false;
 	int m_port_id;
 	unsigned int m_socket_id;
@@ -77,15 +100,11 @@ private:
 	int tx_queues;
 	PortConfig *m_config;
 	
-public:
 	uint8_t mac_addr[6];
 	int init(int num_queues, PortConfig *config);
-	void send(int count);
-	void construct_ipip6_packet(char *buf, int buf_len);
-	void construct_ip_packet(char *buf, int buf_len);
 	Port(int id) : m_port_id(id) { };
 };
 
+#endif /* PORT_H */
 
-extern vector<Port*> ports_vector;
 

@@ -8,14 +8,16 @@ tester_port1_ip_self=168.196.2.1
 tester_port0_ip_dest=168.196.2.1
 tester_port1_ip_dest=168.196.1.1
 
-tester_port1_ip6_self=2001:2::1
-tester_port1_ip6_dest=2001:2::2
-
-b4_port1_ip6_self=2001:2::2
-b4_port1_ip6_dest=2001:2::1
+tester_port1_ip6_self=2001:2:0:0:0:0:0:1
+tester_port1_ip6_dest=2001:2:0:0:0:0:0:2
+tester_port1_tunnel=yes
+                               
+b4_port1_ip6_self=2001:2:0:0:0:0:0:2
+b4_port1_ip6_dest=2001:2:0:0:0:0:0:1
 
 b4_port0_mac_self=52:54:09:11:24:04
 b4_port1_mac_self=52:54:02:12:31:05
 b4_port0_mac_peer=52:54:09:62:34:01
 b4_port1_mac_peer=52:54:01:32:34:02
 
+b4_port1_tunnel=yes
