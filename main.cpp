@@ -114,12 +114,12 @@ int main(int argc, char **argv)
 
 		if (argv[i] == string("--port0-lcoremask"))
 		{
-			ports_lcore_mask[0] = stoull(string(argv[i+1]));
+			ports_lcore_mask[0] = stoull(string(argv[i+1]), nullptr, 16);
 		}
 
 		if (argv[i] == string("--port1-lcoremask"))
 		{
-			ports_lcore_mask[1] = stoull(string(argv[i+1]));
+			ports_lcore_mask[1] = stoull(string(argv[i+1]), nullptr, 16);
 		}
 	}
 
@@ -162,6 +162,8 @@ int main(int argc, char **argv)
 
 		router->add_port(port);
 	}
+
+	router->set_ports_from_config();
 
 	rte_eal_mp_remote_launch(traffic_lcore_thread, NULL, SKIP_MASTER);
 

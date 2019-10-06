@@ -1,11 +1,7 @@
 #include "b4.h"
 
-// First get it to forward from port 0 to port 1, then set up the tunnel
-void DSLiteB4Router::forward(void)
+void DSLiteB4Router::set_ports_from_config(void)
 {
-	Port *local_port, *tunnel_port;
-	unsigned lcore = rte_lcore_id();
-
 	if (ports_vector[0]->m_config->is_ipip6_tun_intf) {
 		tunnel_port = ports_vector[0];
 		local_port = ports_vector[1];
@@ -13,7 +9,12 @@ void DSLiteB4Router::forward(void)
 		tunnel_port = ports_vector[1];
 		local_port = ports_vector[0];
 	}
+}
 
+// First get it to forward from port 0 to port 1, then set up the tunnel
+void DSLiteB4Router::forward(void)
+{
+	unsigned lcore = rte_lcore_id();
 	/*
 	 * If  each port has 2 RX queues and 2 TX queues
 	 * the traffic should be handled like this:

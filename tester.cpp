@@ -1,9 +1,7 @@
 #include "tester.h"
 
-void DSLiteTester::testb4(void)
+void DSLiteTester::set_ports_from_config(void)
 {
-	Port *local_port, *tunnel_port;
-
 	if (ports_vector[0]->m_config->is_ipip6_tun_intf) {
 		tunnel_port = ports_vector[0];
 		local_port = ports_vector[1];
@@ -11,32 +9,84 @@ void DSLiteTester::testb4(void)
 		tunnel_port = ports_vector[1];
 		local_port = ports_vector[0];
 	}
+}
+
+void DSLiteTester::testb4(void)
+{
+	int lcore = (int)rte_lcore_id();
 
 	/*
 	 * We do a 1:1 mapping between queue and lcore, so in the tester case
 	 * you should lcore_num = 2 * queue_num * ports_num
+	 * There are 4 bitmasks that we'll use as sieves for the lcores
+	 * 	port0_lcore_rx_mask;
+	 *  port0_lcore_tx_mask;
+	 *  port1_lcore_rx_mask;
+	 *  port1_lcore_tx_mask;
+	 *
+	 *  Therefore when operating in tester mode the lcores number should be
+	 *  a multiple of 4, and split evenly between the CPU sockets.
 	 */
-	for (;;) {
-		struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[local_port->m_port_id]);
-		struct rte_mbuf *pktsbuf[1];
-		char *buf = rte_pktmbuf_append(pktmbuf, ETH_SIZE_1024);
 
-		construct_ip_packet(local_port->m_config, buf, ETH_SIZE_1024);
+	if (port0_lcore_rx_mask & (0x1ULL << lcore))
+	{
+		for (;;) {
 
-		pktsbuf[0] = pktmbuf;
-
-		/* Send burst of TX packets, to second port of pair. */
-		uint16_t nb_tx = rte_eth_tx_burst(local_port->m_port_id, 0, pktsbuf, 1);
-		rte_pktmbuf_free(pktsbuf[0]);
-		/* Free any unsent packets. */
-		/*
-		if (unlikely(nb_tx < nb_rx)) {
-		    uint16_t bufno;
-		    for (bufno = nb_tx; bufno < nb_rx; bufno++)
 		}
-		*/
+	}
+	if (port0_lcore_tx_mask & (0x1ULL << lcore))
+	{
+		for (;;) {
+			struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[local_port->m_port_id]);
+			struct rte_mbuf *pktsbuf[1];
+			char *buf = rte_pktmbuf_append(pktmbuf, ETH_SIZE_1024);
 
-		rte_delay_ms(2000);
+			construct_ip_packet(local_port->m_config, buf, ETH_SIZE_1024);
+
+			pktsbuf[0] = pktmbuf;
+
+			/* Send burst of TX packets, to second port of pair. */
+			uint16_t nb_tx = rte_eth_tx_burst(local_port->m_port_id, 0, pktsbuf, 1);
+			rte_pktmbuf_free(pktsbuf[0]);
+			/* Free any unsent packets. */
+			/*
+			if (unlikely(nb_tx < nb_rx)) {
+				uint16_t bufno;
+				for (bufno = nb_tx; bufno < nb_rx; bufno++)
+			}
+			*/
+
+			rte_delay_ms(2000);
+		}
+	}
+	if (port1_lcore_rx_mask & (0x1ULL << lcore))
+	{
+
+	}
+	if (port1_lcore_tx_mask & (0x1ULL << lcore))
+	{
+		for (;;) {
+			struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[tunnel_port->m_port_id]);
+			struct rte_mbuf *pktsbuf[1];
+			char *buf = rte_pktmbuf_append(pktmbuf, ETH_SIZE_1024);
+
+			construct_ipip6_packet(tunnel_port->m_config, buf, ETH_SIZE_1024);
+
+			pktsbuf[0] = pktmbuf;
+
+			/* Send burst of TX packets, to second port of pair. */
+			uint16_t nb_tx = rte_eth_tx_burst(tunnel_port->m_port_id, 0, pktsbuf, 1);
+			rte_pktmbuf_free(pktsbuf[0]);
+			/* Free any unsent packets. */
+			/*
+			if (unlikely(nb_tx < nb_rx)) {
+				uint16_t bufno;
+				for (bufno = nb_tx; bufno < nb_rx; bufno++)
+			}
+			*/
+
+			rte_delay_ms(2000);
+		}
 	}
 
 }

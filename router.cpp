@@ -8,6 +8,109 @@ void Router::decapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len
 {
 }
 
+void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
+{
+	uint16_t *ptr16;
+	uint32_t ip_cksum;
+	struct ether_hdr *ethhdr;
+	struct ipv6_hdr *ip6_hdr;
+	struct ipv4_hdr *ip4_hdr;
+	struct ip6_opt *ip6_opt;
+	struct ip6_opt_tunnel *ip6_opt_tun;
+	struct ip6_opt_padn *padn;
+	struct udp_hdr *udp_hdr;
+	uint16_t outer_payload_len = buf_len
+			-sizeof(struct ether_hdr)
+			-sizeof(struct ipv6_hdr);
+	uint16_t inner_payload_len = buf_len
+			-sizeof(struct ether_hdr)
+			-sizeof(struct ipv6_hdr)
+			-sizeof(struct ip6_opt)
+			-sizeof(struct ip6_opt_tunnel)
+			-sizeof(struct ip6_opt_padn);
+	uint16_t data_len = buf_len
+			-sizeof(struct ether_hdr)
+			-sizeof(struct ipv6_hdr)
+			-sizeof(struct ip6_opt)
+			-sizeof(struct ip6_opt_tunnel)
+			-sizeof(struct ip6_opt_padn)
+			-sizeof(struct ipv4_hdr);
+
+	ethhdr = (struct ether_hdr *)buf;
+	ip6_hdr = (struct ipv6_hdr *)(buf+(sizeof(struct ether_hdr)));
+	ip6_opt = (struct ip6_opt *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv6_hdr)));
+	ip6_opt_tun = (struct ip6_opt_tunnel *)(buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt)));
+	padn = (struct ip6_opt_padn *)(buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt))+
+			(sizeof(struct ip6_opt_tunnel)));
+	ip4_hdr = (struct ipv4_hdr *)(buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt))+
+			(sizeof(struct ip6_opt_tunnel))+
+			(sizeof(struct ip6_opt_padn)));
+	udp_hdr = (struct udp_hdr *)(buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt))+
+			(sizeof(struct ip6_opt_tunnel))+
+			(sizeof(struct ip6_opt_padn))+
+			(sizeof(struct ipv4_hdr)));
+
+	memcpy(ethhdr->d_addr.addr_bytes, config->peer_mac, 6);
+	memcpy(ethhdr->s_addr.addr_bytes, config->self_mac, 6);
+
+	/* IPv6 */
+	ethhdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv6);
+
+	/* IPv6 header */
+	ip6_hdr->vtc_flow = rte_cpu_to_be_32(0x60000000); // Set IPv6 version number
+	ip6_hdr->payload_len = rte_cpu_to_be_16(outer_payload_len);
+	ip6_hdr->proto = IPPROTO_DSTOPTS;
+	ip6_hdr->hop_limits = IP_DEFTTL;
+	rte_memcpy(ip6_hdr->src_addr, config->self_ip6, sizeof(ip6_hdr->src_addr));
+	rte_memcpy(ip6_hdr->dst_addr, config->dest_ip6, sizeof(ip6_hdr->dst_addr));
+
+	ip6_opt->ip6o_type = 0x4;
+	ip6_opt->ip6o_len = 0;
+
+	ip6_opt_tun->ip6ot_type = 0x4;
+	ip6_opt_tun->ip6ot_len = 0x1;
+	ip6_opt_tun->ip6ot_encap_limit = 0x4;
+
+	padn->pad_type = 0x1;
+	padn->pad_len = 0x1;
+	padn->padn[0] = 0x0;
+
+	/* IPv4 header */
+	ip4_hdr->version_ihl   = IP_VHL_DEF;
+	ip4_hdr->type_of_service   = 0;
+	ip4_hdr->fragment_offset = 0;
+	ip4_hdr->time_to_live   = IP_DEFTTL;
+	ip4_hdr->next_proto_id = IPPROTO_UDP;
+	ip4_hdr->packet_id = 0;
+	ip4_hdr->total_length   = rte_cpu_to_be_16(inner_payload_len);
+	ip4_hdr->src_addr = rte_cpu_to_be_32(config->self_ip4);
+	ip4_hdr->dst_addr = rte_cpu_to_be_32(config->dest_ip4);
+
+
+
+	// Add some udp payload, we won't really care about this, unless
+	// we want to add some random data here and checksum it to test
+	// for data integrity between the NICs
+	udp_hdr->src_port = rte_cpu_to_be_16(1024);
+	udp_hdr->dst_port = rte_cpu_to_be_16(1024);
+	udp_hdr->dgram_len      = rte_cpu_to_be_16(data_len);
+	udp_hdr->dgram_cksum    = 0xffff; /* No UDP checksum. */
+	//udp_hdr->dgram_cksum    = rte_ipv6_udptcp_cksum(ip_hdr, (void*)udp_hdr); /* No UDP checksum. */
+
+}
+
 void Router::construct_ip6_packet(PortConfig *config, char *buf, int buf_len)
 {
 	struct ether_hdr *hdr;
