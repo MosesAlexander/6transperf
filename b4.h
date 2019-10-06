@@ -4,6 +4,9 @@
 #include "port.h"
 #include "router.h"
 
+#define TX_BURST 1
+#define RX_BURST 8
+
 class DSLiteB4Router : public Router
 {
 public:

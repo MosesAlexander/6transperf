@@ -29,54 +29,113 @@ void DSLiteB4Router::forward(void)
 	 */
 	if (port0_lcore_mask & (1 << lcore))
 	{
-		for (;;) {
-			struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[local_port->m_port_id]);
-			struct rte_mbuf *pktsbuf[1];
-			char *buf = rte_pktmbuf_append(pktmbuf, ETH_SIZE_1024);
+		struct rte_mbuf *tx_buffers[TX_BURST];
+		struct rte_mbuf *rx_buffers[RX_BURST];
+		int received_pkts = 0;
+		int transmit_pkts = 0;
+		int tunnelled_pkts = 0;
+		int tx_idx = 0;
+		char *buf;
+		int queue_num;
 
-			construct_ip6_packet(local_port->m_config, buf, ETH_SIZE_1024);
-
-			pktsbuf[0] = pktmbuf;
-
-			/* Send burst of TX packets, to second port of pair. */
-			uint16_t nb_tx = rte_eth_tx_burst(local_port->m_port_id, 0, pktsbuf, 1);
-			rte_pktmbuf_free(pktsbuf[0]);
-			/* Free any unsent packets. */
-			/*
-			if (unlikely(nb_tx < nb_rx)) {
-				uint16_t bufno;
-				for (bufno = nb_tx; bufno < nb_rx; bufno++)
-			}
-			*/
-
-			rte_delay_ms(2000);
+		local_port->rx_queue_mutex.lock();
+		if (!local_port->rx_queue_index.empty())
+		{
+			queue_num = local_port->rx_queue_index.front();
+			local_port->rx_queue_index.pop();
 		}
+		local_port->rx_queue_mutex.unlock();
+
+		for (;;)
+		{
+			received_pkts = rte_eth_rx_burst(local_port->m_port_id, queue_num, rx_buffers, RX_BURST);
+
+			while (received_pkts > 0 && tx_idx < received_pkts)
+			{
+				tx_buffers[tunnelled_pkts] = rx_buffers[tx_idx];
+				tunnelled_pkts++;
+
+				buf = rte_pktmbuf_prepend(rx_buffers[tx_idx], IPIP6_OVERHEAD_BYTES);
+
+				encapsulate_ipip6_packet(tunnel_port->m_config, buf, ETH_SIZE_1024+IPIP6_OVERHEAD_BYTES);
+
+				if (tunnelled_pkts == TX_BURST)
+				{
+					transmit_pkts = rte_eth_tx_burst(tunnel_port->m_port_id, queue_num, tx_buffers, TX_BURST);
+
+					if (transmit_pkts < TX_BURST)
+					{
+						for(int i = transmit_pkts; i < TX_BURST; i++)
+						{
+							rte_pktmbuf_free(tx_buffers[i]);
+						}
+					}
+				}
+				tx_idx++;
+			}
+
+		}
+
+		local_port->rx_queue_mutex.lock();
+		local_port->rx_queue_index.push(queue_num);
+		local_port->rx_queue_mutex.unlock();
 	}
 
 	if (port1_lcore_mask & (1 << lcore))
 	{
-		for (;;) {
-			struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[local_port->m_port_id]);
-			struct rte_mbuf *pktsbuf[1];
-			char *buf = rte_pktmbuf_append(pktmbuf, ETH_SIZE_1024);
+		struct rte_mbuf *tx_buffers[TX_BURST];
+		struct rte_mbuf *rx_buffers[RX_BURST];
+		int received_pkts = 0;
+		int transmit_pkts = 0;
+		int tunnelled_pkts = 0;
+		int tx_idx = 0;
+		char *buf;
+		int queue_num;
 
-			construct_ip6_packet(local_port->m_config, buf, ETH_SIZE_1024);
-
-			pktsbuf[0] = pktmbuf;
-
-			/* Send burst of TX packets, to second port of pair. */
-			uint16_t nb_tx = rte_eth_tx_burst(local_port->m_port_id, 0, pktsbuf, 1);
-			rte_pktmbuf_free(pktsbuf[0]);
-			/* Free any unsent packets. */
-			/*
-			if (unlikely(nb_tx < nb_rx)) {
-				uint16_t bufno;
-				for (bufno = nb_tx; bufno < nb_rx; bufno++)
-			}
-			*/
-
-			rte_delay_ms(2000);
+		tunnel_port->rx_queue_mutex.lock();
+		if (!tunnel_port->rx_queue_index.empty())
+		{
+			queue_num = tunnel_port->rx_queue_index.front();
+			tunnel_port->rx_queue_index.pop();
 		}
+		tunnel_port->rx_queue_mutex.unlock();
+
+		for (;;)
+		{
+			received_pkts = rte_eth_rx_burst(tunnel_port->m_port_id, queue_num, rx_buffers, RX_BURST);
+
+			while (received_pkts > 0 && tx_idx < received_pkts)
+			{
+				tx_buffers[tunnelled_pkts] = rx_buffers[tx_idx];
+				tunnelled_pkts++;
+
+				buf = rte_pktmbuf_adj(rx_buffers[tx_idx], IPIP6_OVERHEAD_BYTES);
+
+				decapsulate_ipip6_packet(local_port->m_config, buf);
+
+				if (tunnelled_pkts == TX_BURST)
+				{
+					transmit_pkts = rte_eth_tx_burst(local_port->m_port_id, queue_num, tx_buffers, TX_BURST);
+
+					if (transmit_pkts < TX_BURST)
+					{
+						for(int i = transmit_pkts; i < TX_BURST; i++)
+						{
+							rte_pktmbuf_free(tx_buffers[i]);
+						}
+					}
+				}
+				tx_idx++;
+			}
+		}
+
+		tunnel_port->rx_queue_mutex.lock();
+		if (tunnel_port->rx_queue_index.empty())
+		{
+			queue_num = tunnel_port->rx_queue_index.front();
+			tunnel_port->rx_queue_index.pop();
+		}
+		tunnel_port->rx_queue_mutex.unlock();
 	}
 }
 

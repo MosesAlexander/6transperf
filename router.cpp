@@ -2,10 +2,65 @@
 
 void Router::encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 {
+	struct ether_hdr *ethhdr;
+	struct ipv6_hdr *ip6_hdr;
+	struct ip6_opt *ip6_opt;
+	struct ip6_opt_tunnel *ip6_opt_tun;
+	struct ip6_opt_padn *padn;
+	uint16_t outer_payload_len = buf_len
+			-sizeof(struct ether_hdr)
+			-sizeof(struct ipv6_hdr);
+
+	ethhdr = (struct ether_hdr *)buf;
+	ip6_hdr = (struct ipv6_hdr *)(buf+(sizeof(struct ether_hdr)));
+	ip6_opt = (struct ip6_opt *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv6_hdr)));
+	ip6_opt_tun = (struct ip6_opt_tunnel *)(buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt)));
+	padn = (struct ip6_opt_padn *)(buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt))+
+			(sizeof(struct ip6_opt_tunnel)));
+
+	memcpy(ethhdr->d_addr.addr_bytes, config->peer_mac, 6);
+	memcpy(ethhdr->s_addr.addr_bytes, config->self_mac, 6);
+
+	/* IPv6 */
+	ethhdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv6);
+
+	/* IPv6 header */
+	ip6_hdr->vtc_flow = rte_cpu_to_be_32(0x60000000); // Set IPv6 version number
+	ip6_hdr->payload_len = rte_cpu_to_be_16(outer_payload_len);
+	ip6_hdr->proto = IPPROTO_DSTOPTS;
+	ip6_hdr->hop_limits = IP_DEFTTL;
+	rte_memcpy(ip6_hdr->src_addr, config->self_ip6, sizeof(ip6_hdr->src_addr));
+	rte_memcpy(ip6_hdr->dst_addr, config->dest_ip6, sizeof(ip6_hdr->dst_addr));
+
+	ip6_opt->ip6o_type = 0x4;
+	ip6_opt->ip6o_len = 0;
+
+	ip6_opt_tun->ip6ot_type = 0x4;
+	ip6_opt_tun->ip6ot_len = 0x1;
+	ip6_opt_tun->ip6ot_encap_limit = 0x4;
+
+	padn->pad_type = 0x1;
+	padn->pad_len = 0x1;
+	padn->padn[0] = 0x0;
 }
 
-void Router::decapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len)
+void Router::decapsulate_ipip6_packet(PortConfig *config, char *buf)
 {
+	struct ether_hdr *ethhdr;
+
+	ethhdr = (struct ether_hdr *)buf;
+
+	memcpy(ethhdr->d_addr.addr_bytes, config->peer_mac, 6);
+	memcpy(ethhdr->s_addr.addr_bytes, config->self_mac, 6);
+
+	/* IPv4 */
+	ethhdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
 }
 
 void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)

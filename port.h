@@ -14,6 +14,8 @@
 #include <fstream>
 #include <sstream>
 #include <bits/stdc++.h>
+#include <queue>
+#include <mutex>
 
 #include <rte_eal.h>
 #include <rte_debug.h>
@@ -73,9 +75,9 @@ enum config_type_t {
 class PortConfig
 {
 public:
-        PortConfig(char *config_file, int port, config_type_t config_type);
-        uint8_t self_mac[6];
-        uint8_t peer_mac[6];
+    PortConfig(char *config_file, int port, config_type_t config_type);
+    uint8_t self_mac[6];
+    uint8_t peer_mac[6];
 	// IPv4 is stored in host byte order
 	uint32_t self_ip4;
 	uint32_t dest_ip4;
@@ -99,7 +101,11 @@ public:
 	int rx_queues;
 	int tx_queues;
 	PortConfig *m_config;
-	
+	queue<int> rx_queue_index;
+	queue<int> tx_queue_index;
+	mutex rx_queue_mutex;
+	mutex tx_queue_mutex;
+
 	uint8_t mac_addr[6];
 	int init(int num_queues, PortConfig *config);
 	Port(int id) : m_port_id(id) { };

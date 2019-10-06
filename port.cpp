@@ -27,6 +27,12 @@ int Port::init(int num_queues, PortConfig *config) {
 
 	rx_queues = tx_queues = num_queues;
 
+	for (int i = 0; i < num_queues; i++)
+	{
+		rx_queue_index.push(i);
+		tx_queue_index.push(i);
+	}
+
 	ret = rte_eth_dev_configure(m_port_id, rx_queues, tx_queues, &port_conf_default);
 	if (ret != 0)
 		return ret;
