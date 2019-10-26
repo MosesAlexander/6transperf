@@ -1,0 +1,9 @@
+set substitute-path /home/obsrwr/games/poky/build/tmp/work/intel_corei7_64-poky-linux/dpdk/18.11.2-r0/ /home/root/
+layout src
+b main
+define nr
+next
+refresh
+end
+set print pretty
+set args -l 0-4 --master-lcore 0 -n 1 -- -i --mp-alloc xmemhuge

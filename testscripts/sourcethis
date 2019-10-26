@@ -1,0 +1,11 @@
+set substitute-path /home/obsrwr/games/collegeproject/dpdk-stable /home/root/git/
+layout src
+b main
+define nr
+next
+refresh
+end
+set print pretty
+#set args --master-lcore 0 -l 0-4 -n1 -- --num-ports 2 --port0-lcoremask 0x6 --port1-lcoremask 0x18
+set args --master-lcore 0 -l 0-8 -n1 -- --num-ports 2 --port0-lcoremask 0x1e --port1-lcoremask 0x1e0 --num-queues 2 --mode tester
+#b pci_probe_all_drivers
