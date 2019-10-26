@@ -31,7 +31,7 @@ void Router::encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len
 	ethhdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv6);
 
 	/* IPv6 header */
-	ip6_hdr->vtc_flow = rte_cpu_to_be_32(0x60000000); // Set IPv6 version number
+	ip6_hdr->vtc_flow = rte_cpu_to_be_32(0x600e4a1e); // Set IPv6 version number
 	ip6_hdr->payload_len = rte_cpu_to_be_16(outer_payload_len);
 	ip6_hdr->proto = IPPROTO_DSTOPTS;
 	ip6_hdr->hop_limits = IP_DEFTTL;
@@ -124,7 +124,7 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 	ethhdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv6);
 
 	/* IPv6 header */
-	ip6_hdr->vtc_flow = rte_cpu_to_be_32(0x60000000); // Set IPv6 version number
+	ip6_hdr->vtc_flow = rte_cpu_to_be_32(0x600e4a1e); // Set IPv6 version number
 	ip6_hdr->payload_len = rte_cpu_to_be_16(outer_payload_len);
 	ip6_hdr->proto = IPPROTO_DSTOPTS;
 	ip6_hdr->hop_limits = IP_DEFTTL;
@@ -145,15 +145,36 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 	/* IPv4 header */
 	ip4_hdr->version_ihl   = IP_VHL_DEF;
 	ip4_hdr->type_of_service   = 0;
-	ip4_hdr->fragment_offset = 0;
+	ip4_hdr->fragment_offset = rte_cpu_to_be_16(0x4000); // don't fragment
 	ip4_hdr->time_to_live   = IP_DEFTTL;
 	ip4_hdr->next_proto_id = IPPROTO_UDP;
-	ip4_hdr->packet_id = 0;
+	ip4_hdr->packet_id = 0; //rte_cpu_to_be_16(0x0da8); // random string
 	ip4_hdr->total_length   = rte_cpu_to_be_16(inner_payload_len);
 	ip4_hdr->src_addr = rte_cpu_to_be_32(config->self_ip4);
 	ip4_hdr->dst_addr = rte_cpu_to_be_32(config->dest_ip4);
 
+	/*
+	 * Compute IP header checksum.
+	 */
+	ptr16 = (unaligned_uint16_t*) ip4_hdr;
+	ip_cksum = 0;
+	ip_cksum += ptr16[0]; ip_cksum += ptr16[1];
+	ip_cksum += ptr16[2]; ip_cksum += ptr16[3];
+	ip_cksum += ptr16[4];
+	ip_cksum += ptr16[6]; ip_cksum += ptr16[7];
+	ip_cksum += ptr16[8]; ip_cksum += ptr16[9];
 
+	/*
+	 * Reduce 32 bit checksum to 16 bits and complement it.
+	 */
+	ip_cksum = ((ip_cksum & 0xFFFF0000) >> 16) +
+		(ip_cksum & 0x0000FFFF);
+	if (ip_cksum > 65535)
+		ip_cksum -= 65535;
+	ip_cksum = (~ip_cksum) & 0x0000FFFF;
+	if (ip_cksum == 0)
+		ip_cksum = 0xFFFF;
+	ip4_hdr->hdr_checksum = (uint16_t) ip_cksum;
 
 	// Add some udp payload, we won't really care about this, unless
 	// we want to add some random data here and checksum it to test

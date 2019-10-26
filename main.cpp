@@ -68,6 +68,7 @@ int main(int argc, char **argv)
 	int transperf_logtype;
 	vector<Port*> ports_vector;
 	uint64_t ports_lcore_mask[2];
+	bool mode_selected = false;
 
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
@@ -92,21 +93,26 @@ int main(int argc, char **argv)
 
 		if (argv[i] == string("--mode"))
 		{
+			mode_selected = true;
 			if (string(argv[i+1]) == string("b4"))
 			{
 				op_mode = B4_CONFIG;
 				router = new DSLiteB4Router();
 
 			}
-
-			if (string(argv[i+1]) == string("aftr"))
+			else if (string(argv[i+1]) == string("aftr"))
 			{
 				op_mode = AFTR_CONFIG;
 				router = new DSLiteAFTRRouter();
 			}
-
-			if (string(argv[i+1]) == string("tester"))
+			else if (string(argv[i+1]) == string("tester"))
 			{
+				op_mode = TESTER_CONFIG;
+				router = new DSLiteTester();
+			}
+			else
+			{
+				cout<<"No mode selected, choosing Tester as default"<<endl;
 				op_mode = TESTER_CONFIG;
 				router = new DSLiteTester();
 			}
@@ -121,6 +127,13 @@ int main(int argc, char **argv)
 		{
 			ports_lcore_mask[1] = stoull(string(argv[i+1]), nullptr, 16);
 		}
+	}
+
+	if (!mode_selected)
+	{
+		op_mode = TESTER_CONFIG;
+		router = new DSLiteTester();
+
 	}
 
 	num_sockets = rte_socket_count();
