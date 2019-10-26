@@ -1,12 +1,12 @@
 tester_port0_mac_self=52:54:09:62:34:01
 tester_port1_mac_self=52:54:01:32:34:02
-tester_port0_mac_peer=52:54:09:11:24:04
-tester_port1_mac_peer=52:54:02:12:31:05
+tester_port0_mac_peer=52:54:02:12:31:05
+tester_port1_mac_peer=52:54:09:11:24:04
 
 tester_port0_ip_self=168.196.1.1
 tester_port1_ip_self=168.196.2.1
 tester_port0_ip_dest=168.196.2.1
-tester_port1_ip_dest=168.196.1.1
+tester_port1_ip_dest=200.1.2.3
 
 tester_port1_ip6_self=2001:2:0:0:0:0:0:1
 tester_port1_ip6_dest=2001:2:0:0:0:0:0:2

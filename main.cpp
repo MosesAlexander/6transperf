@@ -49,7 +49,7 @@ traffic_lcore_thread(void *arg __rte_unused)
 	switch (op_mode)
 	{
 	case TESTER_CONFIG:
-		dynamic_cast<DSLiteTester*>(router)->testb4();
+		dynamic_cast<DSLiteTester*>(router)->testaftr();
 		break;
 	case B4_CONFIG:
 		dynamic_cast<DSLiteB4Router*>(router)->forward();
@@ -69,6 +69,7 @@ int main(int argc, char **argv)
 	vector<Port*> ports_vector;
 	uint64_t ports_lcore_mask[2];
 	bool mode_selected = false;
+	int num_queues = 1;
 
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
@@ -89,6 +90,13 @@ int main(int argc, char **argv)
 			int arg;
 			arg = atoi(argv[i+1]);
 			num_ports = arg;
+		}
+
+		if (argv[i] == string("--num-queues"))
+		{
+			int arg;
+			arg = atoi(argv[i+1]);
+			num_queues = arg;
 		}
 
 		if (argv[i] == string("--mode"))
@@ -140,7 +148,6 @@ int main(int argc, char **argv)
 	//TODO: Must support more lcores than 64
 	router->port0_lcore_mask = ports_lcore_mask[0];
 	router->port1_lcore_mask = ports_lcore_mask[1];
-	router->set_lcore_allocation(ports_lcore_mask[0], ports_lcore_mask[1]);
 
 	for (int i = 0; i < num_sockets; i++) {
 		string pool_name = string("pool_");
@@ -159,7 +166,7 @@ int main(int argc, char **argv)
 	{
 		Port *port = new Port(i);
 		PortConfig *port_config = new PortConfig("./config_file", i, op_mode);
-		port->init(1, port_config);
+		port->init(num_queues, port_config);
 		cout << "Port " << i << " mac address: "<< std::hex << std::setfill('0') << std::setw(2)
 							<< (unsigned int)port->mac_addr[0] << ":"
 							<< std::hex << std::setfill('0') << std::setw(2)

@@ -27,6 +27,12 @@ struct ip6_opt_padn
 	__u8 padn[1];
 }__attribute__((packed));
 
+struct queue_stats
+{
+	uint64_t rx_frames;
+	uint64_t tx_frames;
+};
+
 class Router
 {
 public:
@@ -34,6 +40,8 @@ public:
 	//TODO: Must support more lcores than 64
 	uint64_t port0_lcore_mask = 0;
 	uint64_t port1_lcore_mask = 0;
+	uint64_t local_port_mask = 0;
+	uint64_t tunnel_port_mask = 0;
 
 	void encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len);
 	void decapsulate_ipip6_packet(PortConfig *config, char *buf);
