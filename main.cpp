@@ -26,8 +26,10 @@
 using namespace std;
 
 config_type_t op_mode = TESTER_CONFIG; // tester config is default
+dslite_test_mode_t dslite_test_mode = AFTR;
 
 Router *router;
+int num_queues = 1;
 
 static void signal_handler(int signum)
 {
@@ -41,6 +43,16 @@ static void signal_handler(int signum)
 		kill(getpid(), signum);
 	}
 
+	if (signum == SIGUSR1)
+	{
+		for (int i = 0; i < num_queues; i++)
+		{
+			cout<<"Local port queue "<<i<<": rx: " <<std::dec<<router->local_port_stats[i].rx_frames;
+			cout<<" tx: "<<std::dec<<router->local_port_stats[i].tx_frames<<endl;
+			cout<<"Tunnel port queue "<<i<<": rx: " <<std::dec<<router->tunnel_port_stats[i].rx_frames;
+			cout<<" tx: " <<std::dec<<router->tunnel_port_stats[i].tx_frames<<endl;
+		}
+	}
 }
 
 int
@@ -49,7 +61,17 @@ traffic_lcore_thread(void *arg __rte_unused)
 	switch (op_mode)
 	{
 	case TESTER_CONFIG:
-		dynamic_cast<DSLiteTester*>(router)->testaftr();
+		switch (dslite_test_mode)
+		{
+		case AFTR:
+			dynamic_cast<DSLiteTester*>(router)->testaftr();
+			break;
+		case B4:
+			dynamic_cast<DSLiteTester*>(router)->testb4();
+			break;
+		case BOTH:
+			break;
+		}
 		break;
 	case B4_CONFIG:
 		dynamic_cast<DSLiteB4Router*>(router)->forward();
@@ -69,10 +91,10 @@ int main(int argc, char **argv)
 	vector<Port*> ports_vector;
 	uint64_t ports_lcore_mask[2];
 	bool mode_selected = false;
-	int num_queues = 1;
 
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
+	signal(SIGUSR1, signal_handler);
 
 	diag = rte_eal_init(argc, argv);	
 	if (diag < 0)
@@ -123,6 +145,27 @@ int main(int argc, char **argv)
 				cout<<"No mode selected, choosing Tester as default"<<endl;
 				op_mode = TESTER_CONFIG;
 				router = new DSLiteTester();
+			}
+		}
+
+		if (argv[i] == string("--dslite-testmode"))
+		{
+			if (string(argv[i+1]) == string("aftr"))
+			{
+				dslite_test_mode = AFTR;
+			}
+			else if (string(argv[i+1]) == string("b4"))
+			{
+				dslite_test_mode = B4;
+			}
+			else if (string(argv[i+1]) == string("both"))
+			{
+				dslite_test_mode = BOTH;
+			}
+			else
+			{
+				cout<<"DSLite Test mode "<<string(argv[i+1])<<" not supported, choosing aftr as default"<<endl;
+				dslite_test_mode = AFTR;
 			}
 		}
 
@@ -189,6 +232,14 @@ int main(int argc, char **argv)
 
 	RTE_LCORE_FOREACH_SLAVE(lcore_id) {
 		ret |= rte_eal_wait_lcore(lcore_id);
+	}
+
+	for (int i = 0; i < num_queues; i++)
+	{
+		cout<<"Local port queue "<<i<<": rx: " <<router->local_port_stats[i].rx_frames;
+		cout<<" tx: "<<router->local_port_stats[i].tx_frames<<endl;
+		cout<<"Tunnel port queue "<<i<<": rx: " <<router->tunnel_port_stats[i].rx_frames;
+		cout<<" tx: "<<router->tunnel_port_stats[i].tx_frames<<endl;
 	}
 
 out:

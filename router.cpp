@@ -74,6 +74,7 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 	struct ip6_opt_tunnel *ip6_opt_tun;
 	struct ip6_opt_padn *padn;
 	struct udp_hdr *udp_hdr;
+	uint64_t *data;
 	uint16_t outer_payload_len = buf_len
 			-sizeof(struct ether_hdr)
 			-sizeof(struct ipv6_hdr);
@@ -116,6 +117,15 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 			(sizeof(struct ip6_opt_tunnel))+
 			(sizeof(struct ip6_opt_padn))+
 			(sizeof(struct ipv4_hdr)));
+	data = (uint64_t *) (buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt))+
+			(sizeof(struct ip6_opt_tunnel))+
+			(sizeof(struct ip6_opt_padn))+
+			(sizeof(struct ipv4_hdr))+
+			(sizeof(struct udp_hdr)));
+
 
 	memcpy(ethhdr->d_addr.addr_bytes, config->peer_mac, 6);
 	memcpy(ethhdr->s_addr.addr_bytes, config->self_mac, 6);
@@ -183,8 +193,9 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 	udp_hdr->dst_port = rte_cpu_to_be_16(1024);
 	udp_hdr->dgram_len      = rte_cpu_to_be_16(data_len);
 	udp_hdr->dgram_cksum    = 0xffff; /* No UDP checksum. */
-	//udp_hdr->dgram_cksum    = rte_ipv6_udptcp_cksum(ip_hdr, (void*)udp_hdr); /* No UDP checksum. */
 
+	*data = 0x811136ee17e;
+	//udp_hdr->dgram_cksum    = rte_ipv6_udptcp_cksum(ip_hdr, (void*)udp_hdr); /* No UDP checksum. */
 }
 
 void Router::construct_ip6_packet(PortConfig *config, char *buf, int buf_len)
@@ -236,10 +247,12 @@ void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len)
 	uint16_t pkt_len;
 	struct ipv4_hdr *ip_hdr;
 	struct udp_hdr *udp_hdr;
+	uint64_t *data;
 
 	hdr = (struct ether_hdr *)buf;
 	ip_hdr = (struct ipv4_hdr *)(buf+(sizeof(struct ether_hdr)));
 	udp_hdr = (struct udp_hdr *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv4_hdr)));
+	data = (uint64_t *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv4_hdr))+(sizeof(struct udp_hdr)));
 
 	memcpy(hdr->d_addr.addr_bytes, config->peer_mac, 6);
 	memcpy(hdr->s_addr.addr_bytes, config->self_mac, 6);
@@ -289,6 +302,8 @@ void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len)
 	udp_hdr->dst_port = rte_cpu_to_be_16(1024);
 	udp_hdr->dgram_len      = rte_cpu_to_be_16(data_len);
 	udp_hdr->dgram_cksum    = 0; /* No UDP checksum. */
+	
+	*data = 0x811136ee17e;
 }
 
 void Router::add_port(Port *port)

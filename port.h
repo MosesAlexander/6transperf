@@ -75,9 +75,9 @@ enum config_type_t {
 class PortConfig
 {
 public:
-    PortConfig(char *config_file, int port, config_type_t config_type);
-    uint8_t self_mac[6];
-    uint8_t peer_mac[6];
+	PortConfig(char *config_file, int port, config_type_t config_type);
+	uint8_t self_mac[6];
+	uint8_t peer_mac[6];
 	// IPv4 is stored in host byte order
 	uint32_t self_ip4;
 	uint32_t dest_ip4;
@@ -112,5 +112,4 @@ public:
 };
 
 #endif /* PORT_H */
-
 

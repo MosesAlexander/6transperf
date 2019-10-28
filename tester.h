@@ -1,6 +1,12 @@
 #include "port.h"
 #include "router.h"
 
+enum dslite_test_mode_t {
+	AFTR,
+	B4,
+	BOTH,
+};
+
 class DSLiteTester : public Router
 {
 public:

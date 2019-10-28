@@ -14,7 +14,15 @@ uint16_t ports_ids[RTE_MAX_ETHPORTS];
 
 static struct rte_eth_conf port_conf_default = {
 	.rxmode = {
-        	.max_rx_pkt_len = ETHER_MAX_LEN
+		.mq_mode = ETH_MQ_RX_RSS,
+        	.max_rx_pkt_len = ETHER_MAX_LEN,
+		.split_hdr_size = 0,
+	},
+	.rx_adv_conf = {
+		.rss_conf = {
+			.rss_key = NULL,
+			.rss_hf = 0x0,
+		},
 	},
 };
 
@@ -24,6 +32,7 @@ static struct rte_eth_conf port_conf_default = {
 int Port::init(int num_queues, PortConfig *config) {
 	int ret;
 	struct rte_mempool *pool;
+	struct rte_eth_dev_info query_info;
 
 	rx_queues = tx_queues = num_queues;
 
@@ -32,6 +41,8 @@ int Port::init(int num_queues, PortConfig *config) {
 		rx_queue_index.push(i);
 		tx_queue_index.push(i);
 	}
+
+	rte_eth_dev_info_get(m_port_id, &query_info);
 
 	ret = rte_eth_dev_configure(m_port_id, rx_queues, tx_queues, &port_conf_default);
 	if (ret != 0)

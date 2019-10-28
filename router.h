@@ -42,6 +42,8 @@ public:
 	uint64_t port1_lcore_mask = 0;
 	uint64_t local_port_mask = 0;
 	uint64_t tunnel_port_mask = 0;
+	struct queue_stats *tunnel_port_stats;
+	struct queue_stats *local_port_stats;
 
 	void encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len);
 	void decapsulate_ipip6_packet(PortConfig *config, char *buf);
