@@ -31,6 +31,12 @@ dslite_test_mode_t dslite_test_mode = AFTR;
 Router *router;
 int num_queues = 1;
 
+// 1Gbps rate is the default
+uint64_t target_rate_bps = 1000 * 1000 * 1000;
+
+// size of an mbuf, total size of a packet, headers included
+uint64_t buffer_length = 1024;
+
 static void signal_handler(int signum)
 {
 	if (signum == SIGINT || signum == SIGTERM) {
@@ -64,10 +70,10 @@ traffic_lcore_thread(void *arg __rte_unused)
 		switch (dslite_test_mode)
 		{
 		case AFTR:
-			dynamic_cast<DSLiteTester*>(router)->testaftr();
+			dynamic_cast<DSLiteTester*>(router)->testaftr(target_rate_bps, buffer_length);
 			break;
 		case B4:
-			dynamic_cast<DSLiteTester*>(router)->testb4();
+			dynamic_cast<DSLiteTester*>(router)->testb4(target_rate_bps, buffer_length);
 			break;
 		case BOTH:
 			break;
@@ -119,6 +125,20 @@ int main(int argc, char **argv)
 			int arg;
 			arg = atoi(argv[i+1]);
 			num_queues = arg;
+		}
+
+		if (argv[i] == string("--bps"))
+		{
+			unsigned long long bps;
+			bps = strtoull(argv[i+1], NULL, 10);
+			target_rate_bps = (uint64_t)bps;
+		}
+
+		if (argv[i] == string("--packet-len"))
+		{
+			unsigned long long len;
+			len = strtoull(argv[i+1], NULL, 10);
+			buffer_length = (uint64_t) len;
 		}
 
 		if (argv[i] == string("--mode"))

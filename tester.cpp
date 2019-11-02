@@ -1,9 +1,27 @@
+/*
+ * Copyright (C) 2019 Alexandru Moise <00moses.alexander00@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public Licens
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-
+ *
+ */
+
 #include "tester.h"
 
 #define TX_BURST 1
 #define RX_BURST 8
 
-void DSLiteTester::testb4(void)
+void DSLiteTester::testb4(uint64_t target_rate, uint64_t buf_len)
 {
 
 }
@@ -36,10 +54,28 @@ inline bool verify_ipip6_packet(char *buf)
 		return false;
 }
 
-void DSLiteTester::testaftr(void)
+void DSLiteTester::testaftr(uint64_t target_rate, uint64_t buf_len)
 {
 	int lcore = (int)rte_lcore_id();
 	int queue_num;
+	uint64_t tsc_hz;
+	uint64_t wait_ticks;
+	uint64_t ticks_upper_bound;
+	uint64_t amt_bits;
+
+
+	/*
+	 * The rate calculation:
+	 * number of TSC ticks in 1 sec ...... target rate in bits
+	 * number of ticks to wait ...... amount of bits we send in one burst
+	 * number of ticks to wait = (TSC ticks in 1 sec * amount of bits per burst) / target rate in bits
+	 */
+
+	tsc_hz = rte_get_tsc_hz();
+
+	amt_bits = TX_BURST * buf_len * 8;
+
+	wait_ticks = tsc_hz * amt_bits / target_rate;
 
 	/*
 	 * We do a 1:1 mapping between queue and lcore, so in the tester case
@@ -53,7 +89,6 @@ void DSLiteTester::testaftr(void)
 	 *  Therefore when operating in tester mode the lcores number should be
 	 *  a multiple of 4, and split evenly between the CPU sockets.
 	 */
-
 	if (local_lcore_rx_mask & (0x1ULL << lcore))
 	{
 		struct rte_mbuf *rx_buffers[RX_BURST];
@@ -97,6 +132,8 @@ void DSLiteTester::testaftr(void)
 	}
 	if (local_lcore_tx_mask & (0x1ULL << lcore))
 	{
+		char *buf;
+
 		local_port->tx_queue_mutex.lock();
 		if (!tunnel_port->tx_queue_index.empty())
 		{
@@ -108,14 +145,17 @@ void DSLiteTester::testaftr(void)
 		for (;;) {
 			struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[local_port->m_port_id]);
 			struct rte_mbuf *pktsbuf[1];
-			char *buf = rte_pktmbuf_append(pktmbuf, ETH_SIZE_1024);
 
-			construct_ip_packet(local_port->m_config, buf, ETH_SIZE_1024);
+			ticks_upper_bound = rte_get_tsc_cycles() + wait_ticks;
+
+			buf = rte_pktmbuf_append(pktmbuf, buf_len);
+
+			construct_ip_packet(local_port->m_config, buf, buf_len);
 
 			pktsbuf[0] = pktmbuf;
 
 			/* Send burst of TX packets, to second port of pair. */
-			uint16_t nb_tx = rte_eth_tx_burst(local_port->m_port_id, queue_num, pktsbuf, 1);
+			uint16_t nb_tx = rte_eth_tx_burst(local_port->m_port_id, queue_num, pktsbuf, TX_BURST);
 
 			local_port_stats[queue_num].tx_frames += nb_tx;
 
@@ -128,7 +168,8 @@ void DSLiteTester::testaftr(void)
 			}
 			*/
 
-			rte_delay_ms(500);
+			/* Busy loop to keep rate constant */
+			while(rte_rdtsc() < ticks_upper_bound);
 		}
 
 		local_port->tx_queue_mutex.lock();
@@ -176,6 +217,8 @@ void DSLiteTester::testaftr(void)
 	}
 	if (tunnel_lcore_tx_mask & (0x1ULL << lcore))
 	{
+		char *buf;
+
 		tunnel_port->tx_queue_mutex.lock();
 		if (!tunnel_port->tx_queue_index.empty())
 		{
@@ -187,14 +230,16 @@ void DSLiteTester::testaftr(void)
 		for (;;) {
 			struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[tunnel_port->m_port_id]);
 			struct rte_mbuf *pktsbuf[1];
-			char *buf = rte_pktmbuf_append(pktmbuf, ETH_SIZE_1024);
+			ticks_upper_bound = rte_get_tsc_cycles() + wait_ticks;
 
-			construct_ipip6_packet(tunnel_port->m_config, buf, ETH_SIZE_1024);
+			buf = rte_pktmbuf_append(pktmbuf, buf_len);
+
+			construct_ipip6_packet(tunnel_port->m_config, buf, buf_len);
 
 			pktsbuf[0] = pktmbuf;
 
 			/* Send burst of TX packets, to second port of pair. */
-			uint16_t nb_tx = rte_eth_tx_burst(tunnel_port->m_port_id, queue_num, pktsbuf, 1);
+			uint16_t nb_tx = rte_eth_tx_burst(tunnel_port->m_port_id, queue_num, pktsbuf, TX_BURST);
 
 			tunnel_port_stats[queue_num].tx_frames += nb_tx;
 
@@ -207,7 +252,8 @@ void DSLiteTester::testaftr(void)
 			}
 			*/
 
-			rte_delay_ms(500);
+			/* Busy loop to keep rate constant */
+			while(rte_rdtsc() < ticks_upper_bound);
 		}
 
 		tunnel_port->tx_queue_mutex.lock();
