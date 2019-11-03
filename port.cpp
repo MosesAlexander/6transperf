@@ -4,7 +4,7 @@ using namespace std;
 
 const uint16_t RX_RING_SIZE = 512;
 const uint16_t TX_RING_SIZE = 512;
-const uint16_t NUM_BUFFERS = 1024;
+const uint16_t NUM_BUFFERS = 1024*50;
 
 
 unsigned int num_sockets;
@@ -87,8 +87,7 @@ int Port::init(int num_queues, PortConfig *config) {
 		return ret;
 
 	rte_eth_promiscuous_enable(m_port_id);
-
-	m_initialized = true;
+m_initialized = true;
 	return 0;
 }
 

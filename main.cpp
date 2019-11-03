@@ -67,17 +67,7 @@ traffic_lcore_thread(void *arg __rte_unused)
 	switch (op_mode)
 	{
 	case TESTER_CONFIG:
-		switch (dslite_test_mode)
-		{
-		case AFTR:
-			dynamic_cast<DSLiteTester*>(router)->testaftr(target_rate_bps, buffer_length);
-			break;
-		case B4:
-			dynamic_cast<DSLiteTester*>(router)->testb4(target_rate_bps, buffer_length);
-			break;
-		case BOTH:
-			break;
-		}
+		dynamic_cast<DSLiteTester*>(router)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
 		break;
 	case B4_CONFIG:
 		dynamic_cast<DSLiteB4Router*>(router)->forward();

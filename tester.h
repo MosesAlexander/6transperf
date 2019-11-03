@@ -23,6 +23,7 @@ enum dslite_test_mode_t {
 	AFTR,
 	B4,
 	BOTH,
+	SELFTEST,
 };
 
 class DSLiteTester : public Router
@@ -34,8 +35,7 @@ public:
 	uint64_t tunnel_lcore_tx_mask;
 	Port *local_port, *tunnel_port;
 
-	void testaftr(uint64_t target_rate, uint64_t buf_len);
-	void testb4(uint64_t target_rate, uint64_t buf_len);
+	void runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_mode_t test_mode);
 	void set_ports_from_config(void);
 	void set_lcore_allocation(uint64_t port0_mask, uint64_t port1_mask);
 };

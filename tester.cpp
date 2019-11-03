@@ -18,13 +18,8 @@
 
 #include "tester.h"
 
-#define TX_BURST 1
-#define RX_BURST 8
-
-void DSLiteTester::testb4(uint64_t target_rate, uint64_t buf_len)
-{
-
-}
+#define TX_BURST 4
+#define RX_BURST 32
 
 inline bool verify_ip_packet(char *buf)
 {
@@ -54,7 +49,46 @@ inline bool verify_ipip6_packet(char *buf)
 		return false;
 }
 
-void DSLiteTester::testaftr(uint64_t target_rate, uint64_t buf_len)
+/*
+ * This function implements a tester in accordance with the requirements of RFC8219.
+ *
+ * Test Mode: AFTR
+ *                   +----------------------------------+
+ *                   |tunnel_port             local_port|
+ *      +----------->|IPv4inIPv6    Tester       IPv4   |<-------------+
+ *      |            |                                  |              |
+ *      |            +----------------------------------+              |
+ *      |                                                              |
+ *      |            +----------------------------------+              |
+ *      |            |                                  |              |
+ *      +----------->|IPv4inIPv6      DUT        IPv4   |<-------------+
+ *                   |decapsulate <===NAT===>           |
+ *                   +----------------------------------+
+ *
+ * Test Mode: B4
+ *                   +----------------------------------+
+ *                   |local_port             tunnel_port|
+ *      +----------->|   IPv4       Tester   IPv4inIPv6 |<-------------+
+ *      |            |                                  |              |
+ *      |            +----------------------------------+              |
+ *      |                                                              |
+ *      |            +----------------------------------+              |
+ *      |            |        <<<===decapsulate         |              |
+ *      +----------->|IPv4            DUT     IPv4inIPv6|<-------------+
+ *                   |        encapsulate===>>>         |
+ *                   +----------------------------------+
+ *
+ * Test Mode: Selftest
+ *
+ *                   +----------------------------------+
+ *                   |local_port             tunnel_port|
+ *      +----------->|IPv4          Tester       IPv4   |<-------------+
+ *      |            |                                  |              |
+ *      |            +----------------------------------+              |
+ *      |                                                              |
+ *      +--------------------------------------------------------------+
+ */
+void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_mode_t test_mode)
 {
 	int lcore = (int)rte_lcore_id();
 	int queue_num;
@@ -96,6 +130,7 @@ void DSLiteTester::testaftr(uint64_t target_rate, uint64_t buf_len)
 		int transmit_pkts = 0;
 		int tunnelled_pkts = 0;
 		int rx_idx = 0;
+		int nb_rx = 0;
 		char *buf;
 		int queue_num;
 
@@ -110,20 +145,29 @@ void DSLiteTester::testaftr(uint64_t target_rate, uint64_t buf_len)
 		
 		for (;;) {
 			received_pkts = rte_eth_rx_burst(local_port->m_port_id, queue_num, rx_buffers, RX_BURST);
+
+			nb_rx = received_pkts; 
 			rx_idx = received_pkts - 1;
 
 			while (received_pkts > 0)
 			{
 				buf = rte_pktmbuf_mtod(rx_buffers[rx_idx], char*);
-				if (verify_ip_packet(buf))
+				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
-					local_port_stats[queue_num].rx_frames++;
+					if (verify_ip_packet(buf))
+					{
+						local_port_stats[queue_num].rx_frames++;
+					}
 				}
 
 				rx_idx--;
 				received_pkts--;
 			}
 
+			for (int i = 0; i < nb_rx; i++)
+			{
+				rte_pktmbuf_free(rx_buffers[i]);
+			}
 		}
 
 		local_port->rx_queue_mutex.lock();
@@ -143,30 +187,43 @@ void DSLiteTester::testaftr(uint64_t target_rate, uint64_t buf_len)
 		local_port->tx_queue_mutex.unlock();
 
 		for (;;) {
-			struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[local_port->m_port_id]);
-			struct rte_mbuf *pktsbuf[1];
+			struct rte_mbuf *pktsbuf[TX_BURST];
+			int buffer_idx = 0;
+			int allocated_packets, remaining_packets;
 
 			ticks_upper_bound = rte_get_tsc_cycles() + wait_ticks;
 
-			buf = rte_pktmbuf_append(pktmbuf, buf_len);
+			for (allocated_packets = 0; allocated_packets < TX_BURST; allocated_packets++)
+			{
+				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[local_port->m_port_id]);
+				if (!pktmbuf)
+				{
+					cout<<"Failed to allocate pktmbuf!"<<endl;
+					exit(EXIT_FAILURE);
+				}
 
-			construct_ip_packet(local_port->m_config, buf, buf_len);
+				buf = rte_pktmbuf_append(pktmbuf, buf_len);
 
-			pktsbuf[0] = pktmbuf;
+				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
+				{
+					construct_ip_packet(local_port->m_config, buf, buf_len);
+				}
+
+				pktsbuf[allocated_packets] = pktmbuf;
+			}
 
 			/* Send burst of TX packets, to second port of pair. */
 			uint16_t nb_tx = rte_eth_tx_burst(local_port->m_port_id, queue_num, pktsbuf, TX_BURST);
 
 			local_port_stats[queue_num].tx_frames += nb_tx;
 
-			rte_pktmbuf_free(pktsbuf[0]);
 			/* Free any unsent packets. */
-			/*
-			if (unlikely(nb_tx < nb_rx)) {
-				uint16_t bufno;
-				for (bufno = nb_tx; bufno < nb_rx; bufno++)
+			if (unlikely(nb_tx < TX_BURST)) {
+				for (remaining_packets = nb_tx; remaining_packets < TX_BURST ; remaining_packets++)
+				{
+					rte_pktmbuf_free(pktsbuf[remaining_packets]);
+				}
 			}
-			*/
 
 			/* Busy loop to keep rate constant */
 			while(rte_rdtsc() < ticks_upper_bound);
@@ -181,6 +238,7 @@ void DSLiteTester::testaftr(uint64_t target_rate, uint64_t buf_len)
 		struct rte_mbuf *rx_buffers[RX_BURST];
 		int received_pkts = 0;
 		int rx_idx = 0;
+		int nb_rx = 0;
 		char *buf;
 		int queue_num;
 
@@ -194,20 +252,40 @@ void DSLiteTester::testaftr(uint64_t target_rate, uint64_t buf_len)
 		
 		for (;;) {
 			received_pkts = rte_eth_rx_burst(tunnel_port->m_port_id, queue_num, rx_buffers, RX_BURST);
+
+			nb_rx = received_pkts;
+
 			rx_idx = received_pkts - 1;
 
 			while (received_pkts > 0)
 			{
 				buf = rte_pktmbuf_mtod(rx_buffers[rx_idx], char*);
-				if (verify_ipip6_packet(buf))
+				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
-					tunnel_port_stats[queue_num].rx_frames++;
+					if (test_mode == AFTR || test_mode == B4)
+					{
+						if (verify_ipip6_packet(buf))
+						{
+							tunnel_port_stats[queue_num].rx_frames++;
+						}
+					}
+					else if (test_mode == SELFTEST)
+					{
+						if (verify_ip_packet(buf))
+						{
+							tunnel_port_stats[queue_num].rx_frames++;
+						}
+					}
 				}
 
 				rx_idx--;
 				received_pkts--;
 			}
 
+			for (int i = 0; i < nb_rx; i++)
+			{
+				rte_pktmbuf_free(rx_buffers[i]);
+			}
 		}
 
 		tunnel_port->rx_queue_mutex.lock();
@@ -228,29 +306,47 @@ void DSLiteTester::testaftr(uint64_t target_rate, uint64_t buf_len)
 		tunnel_port->tx_queue_mutex.unlock();
 
 		for (;;) {
-			struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[tunnel_port->m_port_id]);
-			struct rte_mbuf *pktsbuf[1];
+			struct rte_mbuf *pktsbuf[TX_BURST];
+			int buffer_idx = 0;
+			int allocated_packets, remaining_packets;
+
 			ticks_upper_bound = rte_get_tsc_cycles() + wait_ticks;
 
-			buf = rte_pktmbuf_append(pktmbuf, buf_len);
+			for (allocated_packets = 0; allocated_packets < TX_BURST; allocated_packets++)
+			{
+				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[tunnel_port->m_port_id]);
+				if (!pktmbuf)
+				{
+					cout<<"Failed to allocate pktmbuf!"<<endl;
+					exit(EXIT_FAILURE);
+				}
 
-			construct_ipip6_packet(tunnel_port->m_config, buf, buf_len);
+				buf = rte_pktmbuf_append(pktmbuf, buf_len);
 
-			pktsbuf[0] = pktmbuf;
+				if (test_mode == AFTR || test_mode == B4)
+				{
+					construct_ipip6_packet(tunnel_port->m_config, buf, buf_len);
+				}
+				else if (test_mode == SELFTEST)
+				{
+					construct_ip_packet(tunnel_port->m_config, buf, buf_len);
+				}
+
+				pktsbuf[allocated_packets] = pktmbuf;
+			}
 
 			/* Send burst of TX packets, to second port of pair. */
 			uint16_t nb_tx = rte_eth_tx_burst(tunnel_port->m_port_id, queue_num, pktsbuf, TX_BURST);
 
 			tunnel_port_stats[queue_num].tx_frames += nb_tx;
 
-			rte_pktmbuf_free(pktsbuf[0]);
 			/* Free any unsent packets. */
-			/*
-			if (unlikely(nb_tx < nb_rx)) {
-				uint16_t bufno;
-				for (bufno = nb_tx; bufno < nb_rx; bufno++)
+			if (unlikely(nb_tx < TX_BURST)) {
+				for (remaining_packets = nb_tx; remaining_packets < TX_BURST ; remaining_packets++)
+				{
+					rte_pktmbuf_free(pktsbuf[remaining_packets]);
+				}
 			}
-			*/
 
 			/* Busy loop to keep rate constant */
 			while(rte_rdtsc() < ticks_upper_bound);
