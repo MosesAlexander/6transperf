@@ -143,7 +143,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		}
 		local_port->rx_queue_mutex.unlock();
 		
-		for (;;) {
+		while (traffic_running) {
 			received_pkts = rte_eth_rx_burst(local_port->m_port_id, queue_num, rx_buffers, RX_BURST);
 
 			nb_rx = received_pkts; 
@@ -170,6 +170,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			}
 		}
 
+		// wait for all packets to be received
+		usleep(2*1000*1000);
+
 		local_port->rx_queue_mutex.lock();
 		local_port->rx_queue_index.push(queue_num);
 		local_port->rx_queue_mutex.unlock();
@@ -179,14 +182,14 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		char *buf;
 
 		local_port->tx_queue_mutex.lock();
-		if (!tunnel_port->tx_queue_index.empty())
+		if (!local_port->tx_queue_index.empty())
 		{
 			queue_num = local_port->tx_queue_index.front();
 			local_port->tx_queue_index.pop();
 		}
 		local_port->tx_queue_mutex.unlock();
 
-		for (;;) {
+		while (traffic_running) {
 			struct rte_mbuf *pktsbuf[TX_BURST];
 			int buffer_idx = 0;
 			int allocated_packets, remaining_packets;
@@ -250,7 +253,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		}
 		tunnel_port->rx_queue_mutex.unlock();
 		
-		for (;;) {
+		while (traffic_running) {
 			received_pkts = rte_eth_rx_burst(tunnel_port->m_port_id, queue_num, rx_buffers, RX_BURST);
 
 			nb_rx = received_pkts;
@@ -288,6 +291,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			}
 		}
 
+		// wait for all packets to be received
+		usleep(2*1000*1000);
+
 		tunnel_port->rx_queue_mutex.lock();
 		tunnel_port->rx_queue_index.push(queue_num);
 		tunnel_port->rx_queue_mutex.unlock();
@@ -305,7 +311,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		}
 		tunnel_port->tx_queue_mutex.unlock();
 
-		for (;;) {
+		while (traffic_running) {
 			struct rte_mbuf *pktsbuf[TX_BURST];
 			int buffer_idx = 0;
 			int allocated_packets, remaining_packets;

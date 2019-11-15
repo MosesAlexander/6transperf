@@ -48,7 +48,8 @@ RTE_TARGET ?= x86_64-native-linuxapp-gcc
 
 include $(RTE_SDK)/mk/rte.vars.mk
 
-CFLAGS += -O0 -g
+CFLAGS += -O0 -g -static -march=sandybridge
+CXXFLAGS += -march=sandybridge
 #CFLAGS += $(WERROR_FLAGS)
 
 LDFLAGS += -lstdc++

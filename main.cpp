@@ -76,6 +76,8 @@ traffic_lcore_thread(void *arg __rte_unused)
 		//TODO
 		break;
 	}
+
+	return 0;
 }
 
 int main(int argc, char **argv)
@@ -87,6 +89,7 @@ int main(int argc, char **argv)
 	vector<Port*> ports_vector;
 	uint64_t ports_lcore_mask[2];
 	bool mode_selected = false;
+	uint32_t duration = 10; // seconds
 
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
@@ -108,6 +111,13 @@ int main(int argc, char **argv)
 			int arg;
 			arg = atoi(argv[i+1]);
 			num_ports = arg;
+		}
+
+		if (argv[i] == string("--duration"))
+		{
+			unsigned long sec;
+			sec = strtoul(argv[i+1], NULL, 10);
+			duration = (uint32_t)sec;
 		}
 
 		if (argv[i] == string("--num-queues"))
@@ -172,6 +182,10 @@ int main(int argc, char **argv)
 			{
 				dslite_test_mode = BOTH;
 			}
+			else if (string(argv[i+1]) == string("selftest"))
+			{
+				dslite_test_mode = SELFTEST;
+			}
 			else
 			{
 				cout<<"DSLite Test mode "<<string(argv[i+1])<<" not supported, choosing aftr as default"<<endl;
@@ -197,6 +211,9 @@ int main(int argc, char **argv)
 
 	}
 
+	// Spread the bandwith accross the queues
+	target_rate_bps = target_rate_bps / num_queues;
+
 	num_sockets = rte_socket_count();
 	//TODO: Must support more lcores than 64
 	router->port0_lcore_mask = ports_lcore_mask[0];
@@ -212,6 +229,23 @@ int main(int argc, char **argv)
 			rte_exit(EXIT_FAILURE, "Failed to init memory pool\n");
 
 		mempools_vector.push_back(pool);
+	}
+
+	if (num_sockets == 1 && num_ports > 1)
+	{
+		for (int i = 1; i < num_ports; i++)
+		{
+			string pool_name = string("pool_");
+			pool_name = pool_name + to_string(i);
+			struct rte_mempool *pool = rte_pktmbuf_pool_create(pool_name.c_str(),
+									NUM_BUFFERS, MEMPOOL_CACHE_SIZE,
+							0, RTE_MBUF_DEFAULT_BUF_SIZE, 0);
+			if (pool == nullptr)
+				rte_exit(EXIT_FAILURE, "Failed to init memory pool\n");
+
+			mempools_vector.push_back(pool);
+		}
+
 	}
 
 
@@ -238,18 +272,39 @@ int main(int argc, char **argv)
 
 	router->set_ports_from_config();
 
+	traffic_running = true;
+
 	rte_eal_mp_remote_launch(traffic_lcore_thread, NULL, SKIP_MASTER);
+
+	usleep(duration * 1000 * 1000);
+	traffic_running = false;
 
 	RTE_LCORE_FOREACH_SLAVE(lcore_id) {
 		ret |= rte_eal_wait_lcore(lcore_id);
 	}
 
+	// Local port
 	for (int i = 0; i < num_queues; i++)
 	{
-		cout<<"Local port queue "<<i<<": rx: " <<router->local_port_stats[i].rx_frames;
-		cout<<" tx: "<<router->local_port_stats[i].tx_frames<<endl;
-		cout<<"Tunnel port queue "<<i<<": rx: " <<router->tunnel_port_stats[i].rx_frames;
-		cout<<" tx: "<<router->tunnel_port_stats[i].tx_frames<<endl;
+		cout<<"Local port queue "<<i<<":"<<endl<<"rx: " <<std::dec<<router->local_port_stats[i].rx_frames
+			<<" frames ("<<router->local_port_stats[i].rx_frames*buffer_length<<" bytes, "
+			<<router->local_port_stats[i].rx_frames*buffer_length*8<<" bits)"<<endl;
+		cout<<"tx: "<<std::dec<<router->local_port_stats[i].tx_frames
+			<<" frames ("<<router->local_port_stats[i].tx_frames*buffer_length<<" bytes, "
+			<<router->local_port_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
+	}
+
+	// Tunnel port
+	for (int i = 0; i < num_queues; i++)
+	{
+		cout<<"Tunnel port queue "<<i<<":"<<endl<<"rx: " <<std::dec<<router->tunnel_port_stats[i].rx_frames
+			<<" frames ("<<std::dec<<router->tunnel_port_stats[i].rx_frames<<" bytes, "
+			<<router->tunnel_port_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
+
+		cout<<"tx: "<<std::dec<<router->tunnel_port_stats[i].tx_frames
+			<<" frames ("<<router->tunnel_port_stats[i].tx_frames * buffer_length<<" bytes, "
+			<<router->tunnel_port_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
+
 	}
 
 out:

@@ -48,6 +48,7 @@ using namespace std;
 extern unsigned int num_sockets;
 extern vector<struct rte_mempool *> mempools_vector;
 extern uint16_t ports_ids[RTE_MAX_ETHPORTS];
+extern bool traffic_running;
 
 extern const uint16_t RX_RING_SIZE;
 extern const uint16_t TX_RING_SIZE;

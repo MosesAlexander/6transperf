@@ -9,6 +9,7 @@ const uint16_t NUM_BUFFERS = 1024*50;
 
 unsigned int num_sockets;
 vector<struct rte_mempool *> mempools_vector;
+bool traffic_running;
 
 uint16_t ports_ids[RTE_MAX_ETHPORTS]; 
 
@@ -54,7 +55,7 @@ int Port::init(int num_queues, PortConfig *config) {
 
 	m_config = config;
 
-	pool = mempools_vector[m_socket_id];
+	pool = mempools_vector[m_port_id];
 	
 	for (int queue = 0; queue < rx_queues; queue++) {
 		ret = rte_eth_rx_queue_setup(
