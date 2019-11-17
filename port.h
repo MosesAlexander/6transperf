@@ -34,6 +34,7 @@
 #include <bits/stdc++.h>
 #include <queue>
 #include <mutex>
+#include <atomic>
 
 #include <rte_eal.h>
 #include <rte_debug.h>
@@ -48,7 +49,8 @@ using namespace std;
 extern unsigned int num_sockets;
 extern vector<struct rte_mempool *> mempools_vector;
 extern uint16_t ports_ids[RTE_MAX_ETHPORTS];
-extern bool traffic_running;
+extern bool tx_running;
+extern bool rx_running;
 
 extern const uint16_t RX_RING_SIZE;
 extern const uint16_t TX_RING_SIZE;

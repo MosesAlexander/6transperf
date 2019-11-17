@@ -63,6 +63,10 @@ public:
 	struct queue_stats *tunnel_port_stats;
 	struct queue_stats *local_port_stats;
 
+	// When this counter is equal to the number of total rx queues
+	// tx threads will start
+	std::atomic<int> rx_ready_counter {0};
+
 	void encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len);
 	void decapsulate_ipip6_packet(PortConfig *config, char *buf);
 	void construct_ip6_packet(PortConfig *config, char *buf, int buf_len);

@@ -272,12 +272,15 @@ int main(int argc, char **argv)
 
 	router->set_ports_from_config();
 
-	traffic_running = true;
+	tx_running = true;
+	rx_running = true;
 
 	rte_eal_mp_remote_launch(traffic_lcore_thread, NULL, SKIP_MASTER);
 
 	usleep(duration * 1000 * 1000);
-	traffic_running = false;
+	tx_running = false;
+	usleep(2 * 1000 * 1000);
+	rx_running = false;
 
 	RTE_LCORE_FOREACH_SLAVE(lcore_id) {
 		ret |= rte_eal_wait_lcore(lcore_id);
@@ -341,6 +344,12 @@ int main(int argc, char **argv)
 	cout<<"tx: "<<std::dec<<total_tx_tunnel
 		<<" frames ("<<total_tx_tunnel * buffer_length<<" bytes, "
 		<<total_tx_tunnel * buffer_length * 8<<" bits)"<<endl;
+
+	uint64_t local_drop = total_tx_tunnel - total_rx_local;
+	uint64_t tunnel_drop = total_tx_local - total_rx_tunnel;
+	cout<<endl;
+	cout<<"Local port dropped frames: "<<local_drop<<"("<<(100*(double)local_drop)/(double)total_tx_tunnel<<"%)"<<endl;
+	cout<<"Tunnel port dropped frames: "<<tunnel_drop<<"("<<(100*(double)tunnel_drop)/(double)total_tx_local<<"%)"<<endl;
 
 out:
 	for (vector<Port*>::iterator it = ports_vector.begin() ; it != ports_vector.end(); ++it)

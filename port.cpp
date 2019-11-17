@@ -9,7 +9,8 @@ const uint16_t NUM_BUFFERS = 1024*50;
 
 unsigned int num_sockets;
 vector<struct rte_mempool *> mempools_vector;
-bool traffic_running;
+bool tx_running;
+bool rx_running;
 
 uint16_t ports_ids[RTE_MAX_ETHPORTS]; 
 
@@ -17,7 +18,6 @@ static struct rte_eth_conf port_conf_default = {
 	.rxmode = {
 		.mq_mode = ETH_MQ_RX_RSS,
         	.max_rx_pkt_len = ETHER_MAX_LEN,
-		.split_hdr_size = 0,
 	},
 	.rx_adv_conf = {
 		.rss_conf = {

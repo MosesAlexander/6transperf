@@ -91,12 +91,13 @@ inline bool verify_ipip6_packet(char *buf)
 void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_mode_t test_mode)
 {
 	int lcore = (int)rte_lcore_id();
-	int queue_num;
 	uint64_t tsc_hz;
 	uint64_t wait_ticks;
 	uint64_t ticks_upper_bound;
 	uint64_t amt_bits;
+	int total_rx_queues;
 
+	total_rx_queues = local_port->rx_queues + tunnel_port->rx_queues;
 
 	/*
 	 * The rate calculation:
@@ -142,8 +143,10 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			local_port->rx_queue_index.pop();
 		}
 		local_port->rx_queue_mutex.unlock();
+
+		rx_ready_counter++;
 		
-		while (traffic_running) {
+		while (rx_running) {
 			received_pkts = rte_eth_rx_burst(local_port->m_port_id, queue_num, rx_buffers, RX_BURST);
 
 			nb_rx = received_pkts; 
@@ -170,9 +173,6 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			}
 		}
 
-		// wait for all packets to be received
-		usleep(2*1000*1000);
-
 		local_port->rx_queue_mutex.lock();
 		local_port->rx_queue_index.push(queue_num);
 		local_port->rx_queue_mutex.unlock();
@@ -180,6 +180,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 	if (local_lcore_tx_mask & (0x1ULL << lcore))
 	{
 		char *buf;
+		int queue_num;
 
 		local_port->tx_queue_mutex.lock();
 		if (!local_port->tx_queue_index.empty())
@@ -189,7 +190,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		}
 		local_port->tx_queue_mutex.unlock();
 
-		while (traffic_running) {
+		while(rx_ready_counter.load() < total_rx_queues);
+
+		while (tx_running) {
 			struct rte_mbuf *pktsbuf[TX_BURST];
 			int buffer_idx = 0;
 			int allocated_packets, remaining_packets;
@@ -252,8 +255,10 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			tunnel_port->rx_queue_index.pop();
 		}
 		tunnel_port->rx_queue_mutex.unlock();
+
+		rx_ready_counter++;
 		
-		while (traffic_running) {
+		while (rx_running) {
 			received_pkts = rte_eth_rx_burst(tunnel_port->m_port_id, queue_num, rx_buffers, RX_BURST);
 
 			nb_rx = received_pkts;
@@ -291,9 +296,6 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			}
 		}
 
-		// wait for all packets to be received
-		usleep(2*1000*1000);
-
 		tunnel_port->rx_queue_mutex.lock();
 		tunnel_port->rx_queue_index.push(queue_num);
 		tunnel_port->rx_queue_mutex.unlock();
@@ -302,6 +304,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 	if (tunnel_lcore_tx_mask & (0x1ULL << lcore))
 	{
 		char *buf;
+		int queue_num;
 
 		tunnel_port->tx_queue_mutex.lock();
 		if (!tunnel_port->tx_queue_index.empty())
@@ -311,7 +314,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		}
 		tunnel_port->tx_queue_mutex.unlock();
 
-		while (traffic_running) {
+		while(rx_ready_counter.load() < total_rx_queues);
+
+		while (tx_running) {
 			struct rte_mbuf *pktsbuf[TX_BURST];
 			int buffer_idx = 0;
 			int allocated_packets, remaining_packets;
