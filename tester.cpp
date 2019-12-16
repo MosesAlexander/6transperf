@@ -18,8 +18,8 @@
 
 #include "tester.h"
 
-#define TX_BURST 4
-#define RX_BURST 32
+#define TX_BURST 1 /* Set to 1 to avoid back-to-back frames, can be modified freely, just make sure the RX side can handle the load */
+#define RX_BURST 16
 
 inline bool verify_ip_packet(char *buf)
 {
