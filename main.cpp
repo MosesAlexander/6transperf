@@ -19,9 +19,7 @@
 
 #include "port.h"
 #include "tester.h"
-#include "b4.h"
 #include "router.h"
-#include "aftr.h"
 
 using namespace std;
 
@@ -70,10 +68,8 @@ traffic_lcore_thread(void *arg __rte_unused)
 		dynamic_cast<DSLiteTester*>(router)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
 		break;
 	case B4_CONFIG:
-		dynamic_cast<DSLiteB4Router*>(router)->forward();
 		break;
 	case AFTR_CONFIG:
-		//TODO
 		break;
 	}
 
@@ -144,18 +140,7 @@ int main(int argc, char **argv)
 		if (argv[i] == string("--mode"))
 		{
 			mode_selected = true;
-			if (string(argv[i+1]) == string("b4"))
-			{
-				op_mode = B4_CONFIG;
-				router = new DSLiteB4Router();
-
-			}
-			else if (string(argv[i+1]) == string("aftr"))
-			{
-				op_mode = AFTR_CONFIG;
-				router = new DSLiteAFTRRouter();
-			}
-			else if (string(argv[i+1]) == string("tester"))
+			if (string(argv[i+1]) == string("tester"))
 			{
 				op_mode = TESTER_CONFIG;
 				router = new DSLiteTester();
