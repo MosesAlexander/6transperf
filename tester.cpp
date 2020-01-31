@@ -54,7 +54,7 @@ inline bool verify_ipip6_packet(char *buf)
  *
  * Test Mode: AFTR
  *                   +----------------------------------+
- *                   |tunnel_port             local_port|
+ *                   |port1                        port0|
  *      +----------->|IPv4inIPv6    Tester       IPv4   |<-------------+
  *      |            |                                  |              |
  *      |            +----------------------------------+              |
@@ -67,7 +67,7 @@ inline bool verify_ipip6_packet(char *buf)
  *
  * Test Mode: B4
  *                   +----------------------------------+
- *                   |local_port             tunnel_port|
+ *                   |port0                        port1|
  *      +----------->|   IPv4       Tester   IPv4inIPv6 |<-------------+
  *      |            |                                  |              |
  *      |            +----------------------------------+              |
@@ -81,7 +81,7 @@ inline bool verify_ipip6_packet(char *buf)
  * Test Mode: Selftest
  *
  *                   +----------------------------------+
- *                   |local_port             tunnel_port|
+ *                   |port0                        port1|
  *      +----------->|IPv4          Tester       IPv4   |<-------------+
  *      |            |                                  |              |
  *      |            +----------------------------------+              |
@@ -97,7 +97,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 	uint64_t amt_bits;
 	int total_rx_queues;
 
-	total_rx_queues = local_port->rx_queues + tunnel_port->rx_queues;
+	total_rx_queues = port0->rx_queues + port1->rx_queues;
 
 	/*
 	 * The rate calculation:
@@ -124,7 +124,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 	 *  Therefore when operating in tester mode the lcores number should be
 	 *  a multiple of 4, and split evenly between the CPU sockets.
 	 */
-	if (local_lcore_rx_mask & (0x1ULL << lcore))
+	if (port0_lcore_rx_mask & (0x1ULL << lcore))
 	{
 		struct rte_mbuf *rx_buffers[RX_BURST];
 		int received_pkts = 0;
@@ -136,18 +136,18 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		int queue_num;
 
 		
-		local_port->rx_queue_mutex.lock();
-		if (!local_port->rx_queue_index.empty())
+		port0->rx_queue_mutex.lock();
+		if (!port0->rx_queue_index.empty())
 		{
-			queue_num = local_port->rx_queue_index.front();
-			local_port->rx_queue_index.pop();
+			queue_num = port0->rx_queue_index.front();
+			port0->rx_queue_index.pop();
 		}
-		local_port->rx_queue_mutex.unlock();
+		port0->rx_queue_mutex.unlock();
 
 		rx_ready_counter++;
 		
 		while (rx_running) {
-			received_pkts = rte_eth_rx_burst(local_port->m_port_id, queue_num, rx_buffers, RX_BURST);
+			received_pkts = rte_eth_rx_burst(port0->m_port_id, queue_num, rx_buffers, RX_BURST);
 
 			nb_rx = received_pkts; 
 			rx_idx = received_pkts - 1;
@@ -159,7 +159,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				{
 					if (verify_ip_packet(buf))
 					{
-						local_port_stats[queue_num].rx_frames++;
+						port0_stats[queue_num].rx_frames++;
 					}
 				}
 
@@ -173,22 +173,22 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			}
 		}
 
-		local_port->rx_queue_mutex.lock();
-		local_port->rx_queue_index.push(queue_num);
-		local_port->rx_queue_mutex.unlock();
+		port0->rx_queue_mutex.lock();
+		port0->rx_queue_index.push(queue_num);
+		port0->rx_queue_mutex.unlock();
 	}
-	if (local_lcore_tx_mask & (0x1ULL << lcore))
+	if (port0_lcore_tx_mask & (0x1ULL << lcore))
 	{
 		char *buf;
 		int queue_num;
 
-		local_port->tx_queue_mutex.lock();
-		if (!local_port->tx_queue_index.empty())
+		port0->tx_queue_mutex.lock();
+		if (!port0->tx_queue_index.empty())
 		{
-			queue_num = local_port->tx_queue_index.front();
-			local_port->tx_queue_index.pop();
+			queue_num = port0->tx_queue_index.front();
+			port0->tx_queue_index.pop();
 		}
-		local_port->tx_queue_mutex.unlock();
+		port0->tx_queue_mutex.unlock();
 
 		while(rx_ready_counter.load() < total_rx_queues);
 
@@ -201,7 +201,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 			for (allocated_packets = 0; allocated_packets < TX_BURST; allocated_packets++)
 			{
-				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[local_port->m_port_id]);
+				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[port0->m_port_id]);
 				if (!pktmbuf)
 				{
 					cout<<"Failed to allocate pktmbuf!"<<endl;
@@ -212,16 +212,16 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
-					construct_ip_packet(local_port->m_config, buf, buf_len);
+					construct_ip_packet(port0->m_config, buf, buf_len);
 				}
 
 				pktsbuf[allocated_packets] = pktmbuf;
 			}
 
 			/* Send burst of TX packets, to second port of pair. */
-			uint16_t nb_tx = rte_eth_tx_burst(local_port->m_port_id, queue_num, pktsbuf, TX_BURST);
+			uint16_t nb_tx = rte_eth_tx_burst(port0->m_port_id, queue_num, pktsbuf, TX_BURST);
 
-			local_port_stats[queue_num].tx_frames += nb_tx;
+			port0_stats[queue_num].tx_frames += nb_tx;
 
 			/* Free any unsent packets. */
 			if (unlikely(nb_tx < TX_BURST)) {
@@ -235,11 +235,11 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			while(rte_rdtsc() < ticks_upper_bound);
 		}
 
-		local_port->tx_queue_mutex.lock();
-		local_port->tx_queue_index.push(queue_num);
-		local_port->tx_queue_mutex.unlock();
+		port0->tx_queue_mutex.lock();
+		port0->tx_queue_index.push(queue_num);
+		port0->tx_queue_mutex.unlock();
 	}
-	if (tunnel_lcore_rx_mask & (0x1ULL << lcore))
+	if (port1_lcore_rx_mask & (0x1ULL << lcore))
 	{
 		struct rte_mbuf *rx_buffers[RX_BURST];
 		int received_pkts = 0;
@@ -248,18 +248,18 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		char *buf;
 		int queue_num;
 
-		tunnel_port->rx_queue_mutex.lock();
-		if (!tunnel_port->rx_queue_index.empty())
+		port1->rx_queue_mutex.lock();
+		if (!port1->rx_queue_index.empty())
 		{
-			queue_num = tunnel_port->rx_queue_index.front();
-			tunnel_port->rx_queue_index.pop();
+			queue_num = port1->rx_queue_index.front();
+			port1->rx_queue_index.pop();
 		}
-		tunnel_port->rx_queue_mutex.unlock();
+		port1->rx_queue_mutex.unlock();
 
 		rx_ready_counter++;
 		
 		while (rx_running) {
-			received_pkts = rte_eth_rx_burst(tunnel_port->m_port_id, queue_num, rx_buffers, RX_BURST);
+			received_pkts = rte_eth_rx_burst(port1->m_port_id, queue_num, rx_buffers, RX_BURST);
 
 			nb_rx = received_pkts;
 
@@ -274,14 +274,14 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 					{
 						if (verify_ipip6_packet(buf))
 						{
-							tunnel_port_stats[queue_num].rx_frames++;
+							port1_stats[queue_num].rx_frames++;
 						}
 					}
 					else if (test_mode == SELFTEST)
 					{
 						if (verify_ip_packet(buf))
 						{
-							tunnel_port_stats[queue_num].rx_frames++;
+							port1_stats[queue_num].rx_frames++;
 						}
 					}
 				}
@@ -296,23 +296,23 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			}
 		}
 
-		tunnel_port->rx_queue_mutex.lock();
-		tunnel_port->rx_queue_index.push(queue_num);
-		tunnel_port->rx_queue_mutex.unlock();
+		port1->rx_queue_mutex.lock();
+		port1->rx_queue_index.push(queue_num);
+		port1->rx_queue_mutex.unlock();
 
 	}
-	if (tunnel_lcore_tx_mask & (0x1ULL << lcore))
+	if (port1_lcore_tx_mask & (0x1ULL << lcore))
 	{
 		char *buf;
 		int queue_num;
 
-		tunnel_port->tx_queue_mutex.lock();
-		if (!tunnel_port->tx_queue_index.empty())
+		port1->tx_queue_mutex.lock();
+		if (!port1->tx_queue_index.empty())
 		{
-			queue_num = tunnel_port->tx_queue_index.front();
-			tunnel_port->tx_queue_index.pop();
+			queue_num = port1->tx_queue_index.front();
+			port1->tx_queue_index.pop();
 		}
-		tunnel_port->tx_queue_mutex.unlock();
+		port1->tx_queue_mutex.unlock();
 
 		while(rx_ready_counter.load() < total_rx_queues);
 
@@ -325,7 +325,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 			for (allocated_packets = 0; allocated_packets < TX_BURST; allocated_packets++)
 			{
-				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[tunnel_port->m_port_id]);
+				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[port1->m_port_id]);
 				if (!pktmbuf)
 				{
 					cout<<"Failed to allocate pktmbuf!"<<endl;
@@ -336,20 +336,20 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 				if (test_mode == AFTR || test_mode == B4)
 				{
-					construct_ipip6_packet(tunnel_port->m_config, buf, buf_len);
+					construct_ipip6_packet(port1->m_config, buf, buf_len);
 				}
 				else if (test_mode == SELFTEST)
 				{
-					construct_ip_packet(tunnel_port->m_config, buf, buf_len);
+					construct_ip_packet(port1->m_config, buf, buf_len);
 				}
 
 				pktsbuf[allocated_packets] = pktmbuf;
 			}
 
 			/* Send burst of TX packets, to second port of pair. */
-			uint16_t nb_tx = rte_eth_tx_burst(tunnel_port->m_port_id, queue_num, pktsbuf, TX_BURST);
+			uint16_t nb_tx = rte_eth_tx_burst(port1->m_port_id, queue_num, pktsbuf, TX_BURST);
 
-			tunnel_port_stats[queue_num].tx_frames += nb_tx;
+			port1_stats[queue_num].tx_frames += nb_tx;
 
 			/* Free any unsent packets. */
 			if (unlikely(nb_tx < TX_BURST)) {
@@ -363,9 +363,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			while(rte_rdtsc() < ticks_upper_bound);
 		}
 
-		tunnel_port->tx_queue_mutex.lock();
-		tunnel_port->tx_queue_index.push(queue_num);
-		tunnel_port->tx_queue_mutex.unlock();
+		port1->tx_queue_mutex.lock();
+		port1->tx_queue_index.push(queue_num);
+		port1->tx_queue_mutex.unlock();
 
 	}
 
@@ -374,23 +374,23 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 void DSLiteTester::set_ports_from_config(void)
 {
 	if (ports_vector[0]->m_config->is_ipip6_tun_intf) {
-		tunnel_port = ports_vector[0];
-		local_port = ports_vector[1];
-		tunnel_port_mask = port0_lcore_mask;
-		local_port_mask = port1_lcore_mask;
+		port1 = ports_vector[0];
+		port0 = ports_vector[1];
+		port1_mask = port0_lcore_mask;
+		port0_mask = port1_lcore_mask;
 	} else if (ports_vector[1]->m_config->is_ipip6_tun_intf) {
-		tunnel_port = ports_vector[1];
-		local_port = ports_vector[0];
-		tunnel_port_mask = port1_lcore_mask;
-		local_port_mask = port0_lcore_mask;
+		port1 = ports_vector[1];
+		port0 = ports_vector[0];
+		port1_mask = port1_lcore_mask;
+		port0_mask = port0_lcore_mask;
 	}
 
-	set_lcore_allocation(local_port_mask, tunnel_port_mask);
+	set_lcore_allocation(port0_mask, port1_mask);
 
-	local_port_stats  = new queue_stats[local_port->rx_queues > local_port->tx_queues ?
-					    local_port->rx_queues : local_port->tx_queues]();
-	tunnel_port_stats = new queue_stats[tunnel_port->rx_queues > tunnel_port->tx_queues ?
-					    tunnel_port->rx_queues : tunnel_port->tx_queues]();
+	port0_stats  = new queue_stats[port0->rx_queues > port0->tx_queues ?
+					    port0->rx_queues : port0->tx_queues]();
+	port1_stats = new queue_stats[port1->rx_queues > port1->tx_queues ?
+					    port1->rx_queues : port1->tx_queues]();
 }
 
 int split_mask_in_two(uint64_t mask)
@@ -431,10 +431,10 @@ void DSLiteTester::set_lcore_allocation(uint64_t local_mask, uint64_t tunnel_mas
 		cut1 = split_mask_in_two(local_mask);
 		cut2 = split_mask_in_two(tunnel_mask);
 
-		local_lcore_rx_mask = (local_mask &  (split_mask0 << cut1));
-		local_lcore_tx_mask = (local_mask & ~(split_mask0 << cut1));
+		port0_lcore_rx_mask = (local_mask &  (split_mask0 << cut1));
+		port0_lcore_tx_mask = (local_mask & ~(split_mask0 << cut1));
 
-		tunnel_lcore_rx_mask = (tunnel_mask &  (split_mask1 << cut2));
-		tunnel_lcore_tx_mask = (tunnel_mask & ~(split_mask1 << cut2));
+		port1_lcore_rx_mask = (tunnel_mask &  (split_mask1 << cut2));
+		port1_lcore_tx_mask = (tunnel_mask & ~(split_mask1 << cut2));
 }
 

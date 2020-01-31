@@ -29,11 +29,11 @@ enum dslite_test_mode_t {
 class DSLiteTester : public Router
 {
 public:
-	uint64_t local_lcore_rx_mask;
-	uint64_t local_lcore_tx_mask;
-	uint64_t tunnel_lcore_rx_mask;
-	uint64_t tunnel_lcore_tx_mask;
-	Port *local_port, *tunnel_port;
+	uint64_t port0_lcore_rx_mask;
+	uint64_t port0_lcore_tx_mask;
+	uint64_t port1_lcore_rx_mask;
+	uint64_t port1_lcore_tx_mask;
+	Port *port0, *port1;
 
 	void runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_mode_t test_mode);
 	void set_ports_from_config(void);

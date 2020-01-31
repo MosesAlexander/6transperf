@@ -58,10 +58,10 @@ public:
 	//TODO: Must support more lcores than 64
 	uint64_t port0_lcore_mask = 0;
 	uint64_t port1_lcore_mask = 0;
-	uint64_t local_port_mask = 0;
-	uint64_t tunnel_port_mask = 0;
-	struct queue_stats *tunnel_port_stats;
-	struct queue_stats *local_port_stats;
+	uint64_t port0_mask = 0;
+	uint64_t port1_mask = 0;
+	struct queue_stats *port1_stats;
+	struct queue_stats *port0_stats;
 
 	// When this counter is equal to the number of total rx queues
 	// tx threads will start

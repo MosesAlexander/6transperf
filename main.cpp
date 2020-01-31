@@ -51,10 +51,10 @@ static void signal_handler(int signum)
 	{
 		for (int i = 0; i < num_queues; i++)
 		{
-			cout<<"Local port queue "<<i<<": rx: " <<std::dec<<router->local_port_stats[i].rx_frames;
-			cout<<" tx: "<<std::dec<<router->local_port_stats[i].tx_frames<<endl;
-			cout<<"Tunnel port queue "<<i<<": rx: " <<std::dec<<router->tunnel_port_stats[i].rx_frames;
-			cout<<" tx: " <<std::dec<<router->tunnel_port_stats[i].tx_frames<<endl;
+			cout<<"Port 0 queue "<<i<<": rx: " <<std::dec<<router->port0_stats[i].rx_frames;
+			cout<<" tx: "<<std::dec<<router->port0_stats[i].tx_frames<<endl;
+			cout<<"Port 1 queue "<<i<<": rx: " <<std::dec<<router->port1_stats[i].rx_frames;
+			cout<<" tx: " <<std::dec<<router->port1_stats[i].tx_frames<<endl;
 		}
 	}
 }
@@ -272,28 +272,28 @@ int main(int argc, char **argv)
 	}
 
 	std::cout<<std::endl;
-	// Local port
+	// Port 0
 	for (int i = 0; i < num_queues; i++)
 	{
-		cout<<"Local port queue "<<i<<":"<<endl<<"rx: " <<std::dec<<router->local_port_stats[i].rx_frames
-			<<" frames ("<<router->local_port_stats[i].rx_frames * buffer_length<<" bytes, "
-			<<router->local_port_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
-		cout<<"tx: "<<std::dec<<router->local_port_stats[i].tx_frames
-			<<" frames ("<<router->local_port_stats[i].tx_frames * buffer_length<<" bytes, "
-			<<router->local_port_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
+		cout<<"Port 0 queue "<<i<<":"<<endl<<"rx: " <<std::dec<<router->port0_stats[i].rx_frames
+			<<" frames ("<<router->port0_stats[i].rx_frames * buffer_length<<" bytes, "
+			<<router->port0_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
+		cout<<"tx: "<<std::dec<<router->port0_stats[i].tx_frames
+			<<" frames ("<<router->port0_stats[i].tx_frames * buffer_length<<" bytes, "
+			<<router->port0_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
 	}
 
 	std::cout<<std::endl;
-	// Tunnel port
+	// Port 1
 	for (int i = 0; i < num_queues; i++)
 	{
-		cout<<"Tunnel port queue "<<i<<":"<<endl<<"rx: " <<std::dec<<router->tunnel_port_stats[i].rx_frames
-			<<" frames ("<<std::dec<<router->tunnel_port_stats[i].rx_frames * buffer_length<<" bytes, "
-			<<router->tunnel_port_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
+		cout<<"Port 1 queue "<<i<<":"<<endl<<"rx: " <<std::dec<<router->port1_stats[i].rx_frames
+			<<" frames ("<<std::dec<<router->port1_stats[i].rx_frames * buffer_length<<" bytes, "
+			<<router->port1_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
 
-		cout<<"tx: "<<std::dec<<router->tunnel_port_stats[i].tx_frames
-			<<" frames ("<<router->tunnel_port_stats[i].tx_frames * buffer_length<<" bytes, "
-			<<router->tunnel_port_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
+		cout<<"tx: "<<std::dec<<router->port1_stats[i].tx_frames
+			<<" frames ("<<router->port1_stats[i].tx_frames * buffer_length<<" bytes, "
+			<<router->port1_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
 
 	}
 
@@ -304,15 +304,15 @@ int main(int argc, char **argv)
 
 	for (int i = 0; i < num_queues; i++)
 	{
-		total_rx_local += router->local_port_stats[i].rx_frames;
-		total_tx_local += router->local_port_stats[i].tx_frames;
-		total_rx_tunnel += router->tunnel_port_stats[i].rx_frames;
-		total_tx_tunnel += router->tunnel_port_stats[i].tx_frames;
+		total_rx_local += router->port0_stats[i].rx_frames;
+		total_tx_local += router->port0_stats[i].tx_frames;
+		total_rx_tunnel += router->port1_stats[i].rx_frames;
+		total_tx_tunnel += router->port1_stats[i].tx_frames;
 	}
 
 	std::cout<<std::endl;
 
-	cout<<"Local port total:"<<endl<<"rx: " <<std::dec<<total_rx_local
+	cout<<"Port 0 total:"<<endl<<"rx: " <<std::dec<<total_rx_local
 		<<" frames ("<<std::dec<<total_rx_local * buffer_length<<" bytes, "
 		<<total_rx_local * buffer_length * 8<<" bits)"<<endl;
 
@@ -322,7 +322,7 @@ int main(int argc, char **argv)
 
 	std::cout<<std::endl;
 
-	cout<<"Tunnel port total:"<<endl<<"rx: " <<std::dec<<total_rx_tunnel
+	cout<<"Port 1 total:"<<endl<<"rx: " <<std::dec<<total_rx_tunnel
 		<<" frames ("<<std::dec<<total_rx_tunnel * buffer_length<<" bytes, "
 		<<total_rx_tunnel * buffer_length * 8<<" bits)"<<endl;
 
@@ -333,8 +333,8 @@ int main(int argc, char **argv)
 	uint64_t local_drop = total_tx_tunnel - total_rx_local;
 	uint64_t tunnel_drop = total_tx_local - total_rx_tunnel;
 	cout<<endl;
-	cout<<"Local port dropped frames: "<<local_drop<<"("<<(100*(double)local_drop)/(double)total_tx_tunnel<<"%)"<<endl;
-	cout<<"Tunnel port dropped frames: "<<tunnel_drop<<"("<<(100*(double)tunnel_drop)/(double)total_tx_local<<"%)"<<endl;
+	cout<<"Port 0 dropped frames: "<<local_drop<<"("<<(100*(double)local_drop)/(double)total_tx_tunnel<<"%)"<<endl;
+	cout<<"Port 1 dropped frames: "<<tunnel_drop<<"("<<(100*(double)tunnel_drop)/(double)total_tx_local<<"%)"<<endl;
 
 out:
 	for (vector<Port*>::iterator it = ports_vector.begin() ; it != ports_vector.end(); ++it)
