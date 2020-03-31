@@ -35,6 +35,8 @@
 #include <queue>
 #include <mutex>
 #include <atomic>
+#include <sys/mman.h>
+#include <fstream>
 
 #include <rte_eal.h>
 #include <rte_debug.h>

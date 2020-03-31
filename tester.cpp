@@ -31,6 +31,27 @@ inline bool verify_ip_packet(char *buf)
 		return false;
 }
 
+inline uint64_t extract_ip_send_timestamp(char *buf)
+{
+	uint64_t *data = (uint64_t *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv4_hdr))+(sizeof(struct udp_hdr)) + 8);
+
+	return *data;
+}
+
+inline uint64_t extract_ipip6_send_timestamp(char *buf)
+{
+	uint64_t *data = (uint64_t *) (buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt))+
+			(sizeof(struct ip6_opt_tunnel))+
+			(sizeof(struct ip6_opt_padn))+
+			(sizeof(struct ipv4_hdr))+
+			(sizeof(struct udp_hdr)) + 8);
+
+	return *data;
+}
+
 inline bool verify_ipip6_packet(char *buf)
 {
 
@@ -134,6 +155,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		int nb_rx = 0;
 		char *buf;
 		int queue_num;
+		uint64_t received_tsc;
 
 		
 		port0->rx_queue_mutex.lock();
@@ -149,6 +171,8 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		while (rx_running) {
 			received_pkts = rte_eth_rx_burst(port0->m_port_id, queue_num, rx_buffers, RX_BURST);
 
+			received_tsc = rte_rdtsc();
+
 			nb_rx = received_pkts; 
 			rx_idx = received_pkts - 1;
 
@@ -157,9 +181,16 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				buf = rte_pktmbuf_mtod(rx_buffers[rx_idx], char*);
 				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
-					if (verify_ip_packet(buf))
+					// if the OTHER port is tunneling, check if we are receiving encapsulated packets
+					if (port1->m_config->is_ipip6_tun_intf? verify_ipip6_packet(buf) : verify_ip_packet(buf))
 					{
 						port0_stats[queue_num].rx_frames++;
+						if (timestamp_all_packets) {
+							port0_tsc_pairs_array[queue_num][port0_tsc_pairs_index[queue_num]].rx_tsc_value = received_tsc;
+							port0_tsc_pairs_array[queue_num][port0_tsc_pairs_index[queue_num]++].tx_tsc_value = port1->m_config->is_ipip6_tun_intf?
+																		extract_ipip6_send_timestamp(buf):
+																		extract_ip_send_timestamp(buf);
+						}
 					}
 				}
 
@@ -212,7 +243,14 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
-					construct_ip_packet(port0->m_config, buf, buf_len);
+					if (port0->m_config->is_ipip6_tun_intf)
+					{
+						construct_ipip6_packet(port0->m_config, buf, buf_len, timestamp_all_packets);
+					}
+					else 
+					{
+						construct_ip_packet(port0->m_config, buf, buf_len, timestamp_all_packets);
+					}
 				}
 
 				pktsbuf[allocated_packets] = pktmbuf;
@@ -247,6 +285,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		int nb_rx = 0;
 		char *buf;
 		int queue_num;
+		uint64_t received_tsc;
 
 		port1->rx_queue_mutex.lock();
 		if (!port1->rx_queue_index.empty())
@@ -261,8 +300,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		while (rx_running) {
 			received_pkts = rte_eth_rx_burst(port1->m_port_id, queue_num, rx_buffers, RX_BURST);
 
-			nb_rx = received_pkts;
+			received_tsc = rte_rdtsc();
 
+			nb_rx = received_pkts;
 			rx_idx = received_pkts - 1;
 
 			while (received_pkts > 0)
@@ -270,18 +310,15 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				buf = rte_pktmbuf_mtod(rx_buffers[rx_idx], char*);
 				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
-					if (test_mode == AFTR || test_mode == B4)
+					// if the OTHER port is tunneling, check if you're receiving encapsulated packets
+					if (port0->m_config->is_ipip6_tun_intf? verify_ipip6_packet(buf) : verify_ip_packet(buf))
 					{
-						if (verify_ipip6_packet(buf))
-						{
-							port1_stats[queue_num].rx_frames++;
-						}
-					}
-					else if (test_mode == SELFTEST)
-					{
-						if (verify_ip_packet(buf))
-						{
-							port1_stats[queue_num].rx_frames++;
+						port1_stats[queue_num].rx_frames++;
+						if (timestamp_all_packets) {
+							port1_tsc_pairs_array[queue_num][port1_tsc_pairs_index[queue_num]].rx_tsc_value = received_tsc;
+							port1_tsc_pairs_array[queue_num][port1_tsc_pairs_index[queue_num]++].tx_tsc_value = port0->m_config->is_ipip6_tun_intf ?
+																		extract_ipip6_send_timestamp(buf):
+																		extract_ip_send_timestamp(buf);
 						}
 					}
 				}
@@ -334,13 +371,16 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 				buf = rte_pktmbuf_append(pktmbuf, buf_len);
 
-				if (test_mode == AFTR || test_mode == B4)
+				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
-					construct_ipip6_packet(port1->m_config, buf, buf_len);
-				}
-				else if (test_mode == SELFTEST)
-				{
-					construct_ip_packet(port1->m_config, buf, buf_len);
+					if (port1->m_config->is_ipip6_tun_intf)
+					{
+						construct_ipip6_packet(port1->m_config, buf, buf_len, timestamp_all_packets);
+					}
+					else
+					{
+						construct_ip_packet(port1->m_config, buf, buf_len, timestamp_all_packets);
+					}
 				}
 
 				pktsbuf[allocated_packets] = pktmbuf;

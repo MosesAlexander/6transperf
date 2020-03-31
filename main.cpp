@@ -86,6 +86,7 @@ int main(int argc, char **argv)
 	uint64_t ports_lcore_mask[2];
 	bool mode_selected = false;
 	uint32_t duration = 10; // seconds
+	bool timestamp_all_packets = false;
 
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
@@ -128,6 +129,11 @@ int main(int argc, char **argv)
 			unsigned long long bps;
 			bps = strtoull(argv[i+1], NULL, 10);
 			target_rate_bps = (uint64_t)bps;
+		}
+
+		if (argv[i] == string("--timestamp-all-packets"))
+		{
+			timestamp_all_packets = true;
 		}
 
 		if (argv[i] == string("--packet-len"))
@@ -194,6 +200,30 @@ int main(int argc, char **argv)
 		op_mode = TESTER_CONFIG;
 		router = new DSLiteTester();
 
+	}
+
+	// preallocate buffer space for 
+	if (timestamp_all_packets) {
+		router->timestamp_all_packets = timestamp_all_packets;
+		router->num_tsc_pairs_per_qp = ((target_rate_bps * 1.25 / (8 * buffer_length)) * duration) / num_queues;
+		router->port0_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
+		router->port1_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
+		router->port0_tsc_pairs_index = (uint64_t*) malloc(num_queues * sizeof(uint64_t));
+		router->port1_tsc_pairs_index = (uint64_t*) malloc(num_queues * sizeof(uint64_t));
+
+		for (int i = 0; i < num_queues; i++) {
+			router->port0_tsc_pairs_array[i] = (struct timestamp_pair *) mmap(NULL, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair),
+					PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+			router->port1_tsc_pairs_array[i] = (struct timestamp_pair *) mmap(NULL, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair),
+					PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+
+			memset(router->port0_tsc_pairs_array[i], 0, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair));
+			memset(router->port1_tsc_pairs_array[i], 0, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair));
+			router->port0_tsc_pairs_index[i] = 0;
+			router->port1_tsc_pairs_index[i] = 0;
+		}
+
+		cout<<"Allocated " << router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair) * 4 << " bytes in total for timestamps."<<endl;
 	}
 
 	// Spread the bandwith accross the queues
@@ -335,6 +365,41 @@ int main(int argc, char **argv)
 	cout<<endl;
 	cout<<"Port 0 dropped frames: "<<local_drop<<"("<<(100*(double)local_drop)/(double)total_tx_tunnel<<"%)"<<endl;
 	cout<<"Port 1 dropped frames: "<<tunnel_drop<<"("<<(100*(double)tunnel_drop)/(double)total_tx_local<<"%)"<<endl;
+
+	/*
+	cout<<"Generating timestamp file..."<<endl;
+	
+	ofstream outfile;
+	outfile.open("timestamps.dat");
+	*/
+	
+	if (timestamp_all_packets) {
+		for (int i = 0; i < num_queues; i++)
+		{
+			cout<<"Port 0 Queue Pair "<<i<<" timestamps:"<<endl;
+			for (int j = 0; j < router->num_tsc_pairs_per_qp; j++)
+			{
+				if (router->port0_tsc_pairs_array[i][j].tx_tsc_value == 0 &&
+						router->port0_tsc_pairs_array[i][j].rx_tsc_value == 0)
+					break;
+				/* outfile << "TX: " << router->port0_tsc_pairs_array[i][j].tx_tsc_value
+					<<" RX: " << router->port0_tsc_pairs_array[i][j].rx_tsc_value << endl; */
+			}
+		}
+
+		for (int i = 0; i < num_queues; i++)
+		{
+			cout<<"Port 1 Queue Pair "<<i<<" timestamps:"<<endl;
+			for (int j = 0; j < router->num_tsc_pairs_per_qp; j++)
+			{
+				if (router->port1_tsc_pairs_array[i][j].tx_tsc_value == 0 &&
+						router->port1_tsc_pairs_array[i][j].rx_tsc_value == 0)
+					break;
+				/* outfile << "TX: " << router->port1_tsc_pairs_array[i][j].tx_tsc_value
+					<<" RX: " << router->port1_tsc_pairs_array[i][j].rx_tsc_value << endl;*/
+			}
+		}
+	}
 
 out:
 	for (vector<Port*>::iterator it = ports_vector.begin() ; it != ports_vector.end(); ++it)

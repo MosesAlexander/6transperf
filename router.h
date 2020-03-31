@@ -51,6 +51,12 @@ struct queue_stats
 	uint64_t tx_frames;
 };
 
+struct timestamp_pair
+{
+	uint64_t rx_tsc_value;
+	uint64_t tx_tsc_value;
+};
+
 class Router
 {
 public:
@@ -60,8 +66,16 @@ public:
 	uint64_t port1_lcore_mask = 0;
 	uint64_t port0_mask = 0;
 	uint64_t port1_mask = 0;
-	struct queue_stats *port1_stats;
 	struct queue_stats *port0_stats;
+	struct queue_stats *port1_stats;
+	uint64_t num_tsc_pairs_per_qp;
+	// one index per RX queue
+	uint64_t *port0_tsc_pairs_index;
+	uint64_t *port1_tsc_pairs_index;
+	struct timestamp_pair **port0_tsc_pairs_array;
+	struct timestamp_pair **port1_tsc_pairs_array;
+	bool timestamp_all_packets = false;
+	bool timestamp_500_packets = false;
 
 	// When this counter is equal to the number of total rx queues
 	// tx threads will start
@@ -69,9 +83,9 @@ public:
 
 	void encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len);
 	void decapsulate_ipip6_packet(PortConfig *config, char *buf);
-	void construct_ip6_packet(PortConfig *config, char *buf, int buf_len);
-	void construct_ip_packet(PortConfig *config, char *buf, int buf_len);
-	void construct_ipip6_packet(PortConfig *config, char *buf, int buf_len);
+	void construct_ip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets);
+	void construct_ip_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets);
+	void construct_ipip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets);
 	virtual void set_lcore_allocation(uint64_t port0_mask, uint64_t port1_mask) { }
 	virtual void set_ports_from_config(void) { }
 

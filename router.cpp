@@ -83,7 +83,7 @@ void Router::decapsulate_ipip6_packet(PortConfig *config, char *buf)
 	ethhdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
 }
 
-void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
+void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets)
 {
 	uint16_t *ptr16;
 	uint32_t ip_cksum;
@@ -95,6 +95,7 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 	struct ip6_opt_padn *padn;
 	struct udp_hdr *udp_hdr;
 	uint64_t *data;
+	uint64_t start_tsc;
 	uint16_t outer_payload_len = buf_len
 			-sizeof(struct ether_hdr)
 			-sizeof(struct ipv6_hdr);
@@ -210,15 +211,19 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 	// we want to add some random data here and checksum it to test
 	// for data integrity between the NICs
 	udp_hdr->src_port = rte_cpu_to_be_16(1024);
-	udp_hdr->dst_port = rte_cpu_to_be_16(1024);
+	udp_hdr->dst_port = rte_cpu_to_be_16(id_gen++);
 	udp_hdr->dgram_len      = rte_cpu_to_be_16(data_len);
 	udp_hdr->dgram_cksum    = 0x0; /* No UDP checksum. */
 
-	*data = 0x811136ee17e;
+	data[0] = 0x811136ee17e;
+	if (timestamp_all_packets) {
+		start_tsc = rte_rdtsc();
+		data[1] = start_tsc;
+	}
 	//udp_hdr->dgram_cksum    = rte_ipv6_udptcp_cksum(ip_hdr, (void*)udp_hdr); /* No UDP checksum. */
 }
 
-void Router::construct_ip6_packet(PortConfig *config, char *buf, int buf_len)
+void Router::construct_ip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets)
 {
 	struct ether_hdr *hdr;
 	uint16_t *ptr16;
@@ -227,10 +232,13 @@ void Router::construct_ip6_packet(PortConfig *config, char *buf, int buf_len)
 	uint16_t pkt_len;
 	struct ipv6_hdr *ip_hdr;
 	struct udp_hdr *udp_hdr;
+	uint64_t *data;
+	uint64_t start_tsc;
 
 	hdr = (struct ether_hdr *)buf;
 	ip_hdr = (struct ipv6_hdr *)(buf+(sizeof(struct ether_hdr)));
 	udp_hdr = (struct udp_hdr *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv6_hdr)));
+	data = (uint64_t *) (buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv6_hdr)));
 
 	memcpy(hdr->d_addr.addr_bytes, config->peer_mac, 6);
 	memcpy(hdr->s_addr.addr_bytes, config->self_mac, 6);
@@ -254,11 +262,17 @@ void Router::construct_ip6_packet(PortConfig *config, char *buf, int buf_len)
 	udp_hdr->dst_port = rte_cpu_to_be_16(id_gen++);
 	udp_hdr->dgram_len      = rte_cpu_to_be_16(data_len);
 	udp_hdr->dgram_cksum    = 0; /* No UDP checksum. */
+
+	data[0] = 0x811136ee17e;
+	if (timestamp_all_packets) {
+		start_tsc = rte_rdtsc();
+		data[1] = start_tsc;
+	}
 	//udp_hdr->dgram_cksum    = rte_ipv6_udptcp_cksum(ip_hdr, (void*)udp_hdr); /* No UDP checksum. */
 
 }
 
-void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len)
+void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets)
 {
 	struct ether_hdr *hdr;
 	uint16_t *ptr16;
@@ -268,6 +282,7 @@ void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len)
 	struct ipv4_hdr *ip_hdr;
 	struct udp_hdr *udp_hdr;
 	uint64_t *data;
+	uint64_t start_tsc;
 
 	hdr = (struct ether_hdr *)buf;
 	ip_hdr = (struct ipv4_hdr *)(buf+(sizeof(struct ether_hdr)));
@@ -323,36 +338,17 @@ void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len)
 	udp_hdr->dgram_len      = rte_cpu_to_be_16(data_len);
 	udp_hdr->dgram_cksum    = 0; /* No UDP checksum. */
 	
-	*data = 0x811136ee17e;
+	data[0] = 0x811136ee17e;
+	if (timestamp_all_packets) {
+		start_tsc = rte_rdtsc();
+		data[1] = start_tsc;
+	}
 }
 
 void Router::add_port(Port *port)
 {
 	ports_vector.push_back(port);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
