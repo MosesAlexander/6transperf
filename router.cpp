@@ -19,6 +19,7 @@
 #include "router.h"
 
 static uint16_t id_gen = 0;
+static uint16_t id_gen_ipip6 = 0;
 
 void Router::encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 {
@@ -211,7 +212,7 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len, 
 	// we want to add some random data here and checksum it to test
 	// for data integrity between the NICs
 	udp_hdr->src_port = rte_cpu_to_be_16(1024);
-	udp_hdr->dst_port = rte_cpu_to_be_16(id_gen++);
+	udp_hdr->dst_port = rte_cpu_to_be_16(id_gen_ipip6++);
 	udp_hdr->dgram_len      = rte_cpu_to_be_16(data_len);
 	udp_hdr->dgram_cksum    = 0x0; /* No UDP checksum. */
 

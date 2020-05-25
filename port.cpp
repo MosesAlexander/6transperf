@@ -22,11 +22,13 @@ static struct rte_eth_conf port_conf_default = {
 	.rx_adv_conf = {
 		.rss_conf = {
 			.rss_key = NULL,
-			.rss_hf = ETH_RSS_UDP,
+			.rss_hf = ETH_RSS_UDP | ETH_RSS_TCP | ETH_RSS_IPV6 | ETH_RSS_IPV4,
 		},
 	},
 };
-
+// For reference the RSS mask for Ethernet 10G 2P X520 Adapter is 0x38D34
+// And in my experience the hash function cannot see the UDP packet within a tunneled
+// packet..
 
 
 // TODO: Calculate number of queues according to number of lcores

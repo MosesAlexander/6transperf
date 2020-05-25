@@ -162,6 +162,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		if (!port0->rx_queue_index.empty())
 		{
 			queue_num = port0->rx_queue_index.front();
+			std::cout<< "Into the port0 RX thread, got queue "<<queue_num<<std::endl;
 			port0->rx_queue_index.pop();
 		}
 		port0->rx_queue_mutex.unlock();
@@ -291,6 +292,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		if (!port1->rx_queue_index.empty())
 		{
 			queue_num = port1->rx_queue_index.front();
+			std::cout<< "Into the port1 RX thread, got queue "<<queue_num<<std::endl;
 			port1->rx_queue_index.pop();
 		}
 		port1->rx_queue_mutex.unlock();
@@ -413,6 +415,8 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 void DSLiteTester::set_ports_from_config(void)
 {
+	/*
+	   I might have been drunk when I wrote this...
 	if (ports_vector[0]->m_config->is_ipip6_tun_intf) {
 		port1 = ports_vector[0];
 		port0 = ports_vector[1];
@@ -424,6 +428,12 @@ void DSLiteTester::set_ports_from_config(void)
 		port1_mask = port1_lcore_mask;
 		port0_mask = port0_lcore_mask;
 	}
+	*/
+	port0 = ports_vector[0];
+	port1 = ports_vector[1];
+	port0_mask = port0_lcore_mask;
+	port1_mask = port1_lcore_mask;
+
 
 	set_lcore_allocation(port0_mask, port1_mask);
 
