@@ -76,6 +76,164 @@ traffic_lcore_thread(void *arg __rte_unused)
 	return 0;
 }
 
+//TODO: Should move all the latency calculation code into its own class
+
+void sort_latencies_array(uint64_t *lat_arr, uint64_t num_elems)
+{
+	std::sort(lat_arr, lat_arr+num_elems);
+}
+
+void sort_ipdv_array(int64_t *lat_arr, uint64_t num_elems)
+{
+	std::sort(lat_arr, lat_arr+(int64_t)num_elems);
+}
+
+uint64_t get_merged_array_size(uint64_t *queue_pair_index, int num_queues)
+{
+	uint64_t merged_array_size = 0;
+
+	for (int array = 0; array < num_queues; array++)
+	{
+		merged_array_size += queue_pair_index[array];
+	}
+
+	return merged_array_size;
+}
+
+inline uint64_t select_latency_by_minimum_tx_time(struct timestamp_pair **tsc_pairs_array,
+		uint64_t *queue_pair_index, uint64_t *local_queue_pair_index, int num_queues)
+{
+	uint64_t current_min = ULONG_MAX;
+	uint64_t tmp;
+	int current_winner = 0;
+	uint64_t ret_latency;
+
+	for (int qp_index = 0; qp_index < num_queues; qp_index++)
+	{
+		// Did we reach the end of the current array?
+		if (local_queue_pair_index[qp_index] != queue_pair_index[qp_index])
+		{
+			if (current_min > tsc_pairs_array[qp_index][local_queue_pair_index[qp_index]].tx_tsc_value)
+			{
+				current_min = tsc_pairs_array[qp_index][local_queue_pair_index[qp_index]].tx_tsc_value;
+				current_winner = qp_index;
+			}
+		} 
+	}
+
+	ret_latency = tsc_pairs_array[current_winner][local_queue_pair_index[current_winner]].rx_tsc_value -
+		tsc_pairs_array[current_winner][local_queue_pair_index[current_winner]].tx_tsc_value;
+
+	local_queue_pair_index[current_winner]++;
+
+	return ret_latency;
+}
+
+// This function takes a table of arrays containing timestamps
+// and returns an array of latencies, merging the tsc arrays consumes
+// them.
+uint64_t *merge_tsc_arrays_into_latencies(struct timestamp_pair **tsc_pairs_array, uint64_t *queue_pair_index, int num_queues)
+{
+	// So we need to get the mean of the latencies
+	// We have up to num_queues arrays, do we merge these?
+	uint64_t merged_array_size;
+	uint64_t *merged_array;
+	uint64_t tsc_idx = 0;
+	uint64_t merged_idx = 0;
+	uint64_t *local_index_per_qp;
+
+	merged_array_size = get_merged_array_size(queue_pair_index, num_queues);
+
+	merged_array = (uint64_t*) malloc(sizeof(uint64_t) * merged_array_size);
+	local_index_per_qp = (uint64_t*) malloc(sizeof(uint64_t) * num_queues);
+
+	memset(local_index_per_qp, 0, sizeof(uint64_t) * num_queues);
+
+	for (int i = 0; i < merged_array_size; i++)
+	{
+		merged_array[i] = select_latency_by_minimum_tx_time(tsc_pairs_array, queue_pair_index, local_index_per_qp, num_queues);
+	}
+
+	for (int array = 0; array < num_queues; array++)
+	{
+		// We don't need this tsc_pairs_array anymore
+		munmap(tsc_pairs_array[array], queue_pair_index[array] * sizeof(struct timestamp_pair));
+	}
+
+	free(local_index_per_qp);
+
+	// Return array of latencies sorted according to transmit time
+	return merged_array;
+}
+
+template<class T>
+double median_of_latencies(T *latencies_array, uint64_t merged_array_size)
+{
+	double mean, median;
+	uint64_t idx;
+
+	idx = merged_array_size / 2;
+	if ((merged_array_size % 2) == 0)
+	{
+		median = ((double)latencies_array[idx] + (double)latencies_array[idx-1])/2.0;
+	}
+	else
+	{
+		median = latencies_array[idx];
+	}
+
+	return median;
+}
+
+
+double rand_double(double min, double max)
+{
+    return  (max - min) * ((((double) rand()) / (double) RAND_MAX)) + min ;
+}
+
+// 99.9th percentile of the dataset
+uint64_t calculate_wcl(uint64_t *latencies_array, uint64_t size)
+{
+	uint64_t idx;
+
+	idx = size * 0.999 - 1;
+
+	return latencies_array[idx];
+}
+
+// 99.9th percentile of the dataset - minimum of the dataset
+uint64_t calculate_pdv(uint64_t *latencies_array, uint64_t size)
+{
+	uint64_t idx;
+
+	idx = size * 0.999 - 1;
+
+	// Since the array is sorted element 0 is the minimum
+	return latencies_array[idx] - latencies_array[0];
+}
+
+typedef enum {
+	TEST_LAT,
+	TEST_PDV,
+	TEST_IPDV,
+} test_type_t;
+
+// Consumes latencies array
+int64_t *generate_ipdv_array_from_latencies_array(uint64_t *latencies_array, uint64_t size)
+{
+	int64_t *ipdv_array = (int64_t *)malloc(sizeof(int64_t)*(size-1));
+
+	for (int i = 0 ; i < (size - 1); i++)
+	{
+		ipdv_array[i] = (int64_t)latencies_array[i+1] - (int64_t)latencies_array[i];
+	}
+
+	free(latencies_array);
+	return ipdv_array;
+}
+
+
+
 int main(int argc, char **argv)
 {
 	int diag, ret, num_ports;
@@ -87,6 +245,8 @@ int main(int argc, char **argv)
 	bool mode_selected = false;
 	uint32_t duration = 10; // seconds
 	bool timestamp_all_packets = false;
+	test_type_t test_type = TEST_LAT;
+
 
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
@@ -193,6 +353,22 @@ int main(int argc, char **argv)
 		{
 			ports_lcore_mask[1] = stoull(string(argv[i+1]), nullptr, 16);
 		}
+
+		if (argv[i] == string("--pdv"))
+		{
+			test_type = TEST_PDV;
+		}
+
+		if (argv[i] == string("--ipdv"))
+		{
+			test_type = TEST_IPDV;
+		}
+
+		if (argv[i] == string("--lat"))
+		{
+			test_type = TEST_LAT;
+		}
+
 	}
 
 	if (!mode_selected)
@@ -327,78 +503,125 @@ int main(int argc, char **argv)
 
 	}
 
-	uint64_t total_rx_local = 0;
-	uint64_t total_rx_tunnel = 0;
-	uint64_t total_tx_local = 0;
-	uint64_t total_tx_tunnel = 0;
+	uint64_t total_rx_port0 = 0;
+	uint64_t total_rx_port1 = 0;
+	uint64_t total_tx_port0 = 0;
+	uint64_t total_tx_port1 = 0;
 
 	for (int i = 0; i < num_queues; i++)
 	{
-		total_rx_local += router->port0_stats[i].rx_frames;
-		total_tx_local += router->port0_stats[i].tx_frames;
-		total_rx_tunnel += router->port1_stats[i].rx_frames;
-		total_tx_tunnel += router->port1_stats[i].tx_frames;
+		total_rx_port0 += router->port0_stats[i].rx_frames;
+		total_tx_port0 += router->port0_stats[i].tx_frames;
+		total_rx_port1 += router->port1_stats[i].rx_frames;
+		total_tx_port1 += router->port1_stats[i].tx_frames;
 	}
 
 	std::cout<<std::endl;
 
-	cout<<"Port 0 total:"<<endl<<"rx: " <<std::dec<<total_rx_local
-		<<" frames ("<<std::dec<<total_rx_local * buffer_length<<" bytes, "
-		<<total_rx_local * buffer_length * 8<<" bits)"<<endl;
+	cout<<"Port 0 total:"<<endl<<"rx: " <<std::dec<<total_rx_port0
+		<<" frames ("<<std::dec<<total_rx_port0 * buffer_length<<" bytes, "
+		<<total_rx_port0 * buffer_length * 8<<" bits)"<<endl;
 
-	cout<<"tx: "<<std::dec<<total_tx_local
-		<<" frames ("<<total_tx_local * buffer_length<<" bytes, "
-		<<total_tx_local * buffer_length * 8<<" bits)"<<endl;
+	cout<<"tx: "<<std::dec<<total_tx_port0
+		<<" frames ("<<total_tx_port0 * buffer_length<<" bytes, "
+		<<total_tx_port0 * buffer_length * 8<<" bits)"<<endl;
 
 	std::cout<<std::endl;
 
-	cout<<"Port 1 total:"<<endl<<"rx: " <<std::dec<<total_rx_tunnel
-		<<" frames ("<<std::dec<<total_rx_tunnel * buffer_length<<" bytes, "
-		<<total_rx_tunnel * buffer_length * 8<<" bits)"<<endl;
+	cout<<"Port 1 total:"<<endl<<"rx: " <<std::dec<<total_rx_port1
+		<<" frames ("<<std::dec<<total_rx_port1 * buffer_length<<" bytes, "
+		<<total_rx_port1 * buffer_length * 8<<" bits)"<<endl;
 
-	cout<<"tx: "<<std::dec<<total_tx_tunnel
-		<<" frames ("<<total_tx_tunnel * buffer_length<<" bytes, "
-		<<total_tx_tunnel * buffer_length * 8<<" bits)"<<endl;
+	cout<<"tx: "<<std::dec<<total_tx_port1
+		<<" frames ("<<total_tx_port1 * buffer_length<<" bytes, "
+		<<total_tx_port1 * buffer_length * 8<<" bits)"<<endl;
 
-	uint64_t local_drop = total_tx_tunnel - total_rx_local;
-	uint64_t tunnel_drop = total_tx_local - total_rx_tunnel;
+	uint64_t local_drop = total_tx_port1 - total_rx_port0;
+	uint64_t tunnel_drop = total_tx_port0 - total_rx_port1;
 	cout<<endl;
-	cout<<"Port 0 dropped frames: "<<local_drop<<"("<<(100*(double)local_drop)/(double)total_tx_tunnel<<"%)"<<endl;
-	cout<<"Port 1 dropped frames: "<<tunnel_drop<<"("<<(100*(double)tunnel_drop)/(double)total_tx_local<<"%)"<<endl;
+	cout<<"Port 0 dropped frames: "<<local_drop<<"("<<(100*(double)local_drop)/(double)total_tx_port1<<"%)"<<endl;
+	cout<<"Port 1 dropped frames: "<<tunnel_drop<<"("<<(100*(double)tunnel_drop)/(double)total_tx_port0<<"%)"<<endl;
 
-	/*
-	cout<<"Generating timestamp file..."<<endl;
-	
-	ofstream outfile;
-	outfile.open("timestamps.dat");
-	*/
+	// Calculate Latency, PDV, IPDV
+	double median_port0;
+	double median_port1;
+	uint64_t *latencies_array_merged;
+	int64_t *ipdv_array;
+	uint64_t merged_array_size;
+	uint64_t port0_wcl;
+	uint64_t port1_wcl;
+	uint64_t port0_pdv;
+	uint64_t port1_pdv;
+	int64_t port0_min_ipdv;
+	int64_t port0_median_ipdv;
+	int64_t port0_max_ipdv;
+	int64_t port1_min_ipdv;
+	int64_t port1_median_ipdv;
+	int64_t port1_max_ipdv;
+
+
 	
 	if (timestamp_all_packets) {
-		for (int i = 0; i < num_queues; i++)
+		if (test_type == TEST_LAT || test_type == TEST_PDV)
 		{
-			cout<<"Port 0 Queue Pair "<<i<<" timestamps:"<<endl;
-			for (int j = 0; j < router->num_tsc_pairs_per_qp; j++)
-			{
-				if (router->port0_tsc_pairs_array[i][j].tx_tsc_value == 0 &&
-						router->port0_tsc_pairs_array[i][j].rx_tsc_value == 0)
-					break;
-				/* outfile << "TX: " << router->port0_tsc_pairs_array[i][j].tx_tsc_value
-					<<" RX: " << router->port0_tsc_pairs_array[i][j].rx_tsc_value << endl; */
-			}
+			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->port0_tsc_pairs_index, num_queues);
+			merged_array_size = get_merged_array_size(router->port0_tsc_pairs_index, num_queues);
+			sort_latencies_array(latencies_array_merged, merged_array_size);
+			median_port0 = median_of_latencies<uint64_t>(latencies_array_merged, merged_array_size);
+			port0_wcl = calculate_wcl(latencies_array_merged, merged_array_size);
+			port0_pdv = calculate_pdv(latencies_array_merged, merged_array_size);
+			free(latencies_array_merged);
+
+			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port1_tsc_pairs_array, router->port1_tsc_pairs_index, num_queues);
+			merged_array_size = get_merged_array_size(router->port1_tsc_pairs_index, num_queues);
+			sort_latencies_array(latencies_array_merged, merged_array_size);
+			median_port1 = median_of_latencies<uint64_t>(latencies_array_merged, merged_array_size);
+			port1_wcl = calculate_wcl(latencies_array_merged, merged_array_size);
+			port1_pdv = calculate_pdv(latencies_array_merged, merged_array_size);
+			free(latencies_array_merged);
+
+			cout<<"Port 0 median latency: "<<std::fixed<<median_port0<<endl;
+			cout<<"Port 0 worst-case latency: "<<port0_wcl<<endl;
+			cout<<"Port 0 PDV: "<<port0_pdv<<endl;
+			cout<<"Port 1 median latency: "<<median_port1<<endl;
+			cout<<"Port 1 worst-case latency: "<<port1_wcl<<endl;
+			cout<<"Port 1 PDV: "<<port1_pdv<<endl;
+		}
+		else if (test_type == TEST_IPDV)
+		{
+			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->port0_tsc_pairs_index, num_queues);
+			merged_array_size = get_merged_array_size(router->port0_tsc_pairs_index, num_queues);
+			ipdv_array = generate_ipdv_array_from_latencies_array(latencies_array_merged, merged_array_size);
+			sort_ipdv_array(ipdv_array, merged_array_size-1);
+			port0_min_ipdv = ipdv_array[0];
+			port0_median_ipdv = median_of_latencies<int64_t>(ipdv_array, merged_array_size-1); // IPDV array is 1 element smaller than the latencies array
+			port0_max_ipdv = ipdv_array[merged_array_size-2]; // Last element in ipdv array is the max
+			free(ipdv_array);
+
+			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port1_tsc_pairs_array, router->port1_tsc_pairs_index, num_queues);
+			merged_array_size = get_merged_array_size(router->port1_tsc_pairs_index, num_queues);
+			ipdv_array = generate_ipdv_array_from_latencies_array(latencies_array_merged, merged_array_size);
+			sort_ipdv_array(ipdv_array, merged_array_size-1);
+			port1_min_ipdv = ipdv_array[0];
+			port1_median_ipdv = median_of_latencies<int64_t>(ipdv_array, merged_array_size-1); // IPDV array is 1 element smaller than the latencies array
+			port1_max_ipdv = ipdv_array[merged_array_size-2]; // Last element in ipdv array is the max
+			free(ipdv_array);
+
+			cout<<"Port 0 Min IPDV: "   <<port0_min_ipdv<<endl;
+			cout<<"Port 0 Median IPDV: "<<port0_median_ipdv<<endl;
+			cout<<"Port 0 Max IPDV: "   <<port0_max_ipdv<<endl;
+			cout<<"Port 1 Min IPDV: "   <<port1_min_ipdv<<endl;
+			cout<<"Port 1 Median IPDV: "<<port1_median_ipdv<<endl;
+			cout<<"Port 1 Max IPDV: "   <<port1_max_ipdv<<endl;
 		}
 
-		for (int i = 0; i < num_queues; i++)
-		{
-			cout<<"Port 1 Queue Pair "<<i<<" timestamps:"<<endl;
-			for (int j = 0; j < router->num_tsc_pairs_per_qp; j++)
-			{
-				if (router->port1_tsc_pairs_array[i][j].tx_tsc_value == 0 &&
-						router->port1_tsc_pairs_array[i][j].rx_tsc_value == 0)
-					break;
-				/* outfile << "TX: " << router->port1_tsc_pairs_array[i][j].tx_tsc_value
-					<<" RX: " << router->port1_tsc_pairs_array[i][j].rx_tsc_value << endl;*/
-			}
-		}
+		cout<<"TSC frequency: "<< rte_get_tsc_hz() << endl;
+		uint64_t tsc1 = rte_rdtsc();
+		usleep(500);
+		uint64_t tsc2 = rte_rdtsc();
+		cout<<"tsc1: "<<tsc1<<" tsc2: "<<tsc2<<" diff: "<<tsc2-tsc1<<endl;
+	
+
 	}
 
 out:

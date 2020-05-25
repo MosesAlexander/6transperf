@@ -10,4 +10,3 @@ tester_port1_ip_dest=200.1.2.3
 
 tester_port1_ip6_self=2001:2:0:0:0:0:0:1
 tester_port1_ip6_dest=2001:2:0:0:0:0:0:2
-tester_port1_tunnel=yes
