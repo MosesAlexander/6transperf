@@ -162,7 +162,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		if (!port0->rx_queue_index.empty())
 		{
 			queue_num = port0->rx_queue_index.front();
-			std::cout<< "Into the port0 RX thread, got queue "<<queue_num<<std::endl;
+			//std::cout<< "Into the port0 RX thread, got queue "<<queue_num<<std::endl;
 			port0->rx_queue_index.pop();
 		}
 		port0->rx_queue_mutex.unlock();
@@ -292,7 +292,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		if (!port1->rx_queue_index.empty())
 		{
 			queue_num = port1->rx_queue_index.front();
-			std::cout<< "Into the port1 RX thread, got queue "<<queue_num<<std::endl;
+			//std::cout<< "Into the port1 RX thread, got queue "<<queue_num<<std::endl;
 			port1->rx_queue_index.pop();
 		}
 		port1->rx_queue_mutex.unlock();

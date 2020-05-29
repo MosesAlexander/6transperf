@@ -580,12 +580,14 @@ int main(int argc, char **argv)
 			port1_pdv = calculate_pdv(latencies_array_merged, merged_array_size);
 			free(latencies_array_merged);
 
-			cout<<"Port 0 median latency: "<<std::fixed<<median_port0<<endl;
-			cout<<"Port 0 worst-case latency: "<<port0_wcl<<endl;
-			cout<<"Port 0 PDV: "<<port0_pdv<<endl;
-			cout<<"Port 1 median latency: "<<median_port1<<endl;
-			cout<<"Port 1 worst-case latency: "<<port1_wcl<<endl;
-			cout<<"Port 1 PDV: "<<port1_pdv<<endl;
+			uint64_t tsc_hz = rte_get_tsc_hz();
+
+			cout<<"Port 0 median latency: "<<std::fixed<<(double)median_port0/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 0 worst-case latency: "<<(double)port0_wcl/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 0 PDV: "<<(double)port0_pdv/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 1 median latency: "<<(double)median_port1/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 1 worst-case latency: "<<(double)port1_wcl/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 1 PDV: "<<(double)port1_pdv/(double)tsc_hz * 1000<<" msec"<<endl;
 		}
 		else if (test_type == TEST_IPDV)
 		{
@@ -606,22 +608,16 @@ int main(int argc, char **argv)
 			port1_median_ipdv = median_of_latencies<int64_t>(ipdv_array, merged_array_size-1); // IPDV array is 1 element smaller than the latencies array
 			port1_max_ipdv = ipdv_array[merged_array_size-2]; // Last element in ipdv array is the max
 			free(ipdv_array);
+			
+			uint64_t tsc_hz = rte_get_tsc_hz();
 
-			cout<<"Port 0 Min IPDV: "   <<port0_min_ipdv<<endl;
-			cout<<"Port 0 Median IPDV: "<<port0_median_ipdv<<endl;
-			cout<<"Port 0 Max IPDV: "   <<port0_max_ipdv<<endl;
-			cout<<"Port 1 Min IPDV: "   <<port1_min_ipdv<<endl;
-			cout<<"Port 1 Median IPDV: "<<port1_median_ipdv<<endl;
-			cout<<"Port 1 Max IPDV: "   <<port1_max_ipdv<<endl;
+			cout<<"Port 0 Min IPDV: "   <<std::fixed<<(double)port0_min_ipdv/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 0 Median IPDV: "<<(double)port0_median_ipdv/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 0 Max IPDV: "   <<(double)port0_max_ipdv/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 1 Min IPDV: "   <<(double)port1_min_ipdv/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 1 Median IPDV: "<<(double)port1_median_ipdv/(double)tsc_hz * 1000<<" msec"<<endl;
+			cout<<"Port 1 Max IPDV: "   <<(double)port1_max_ipdv/(double)tsc_hz * 1000<<" msec"<<endl;
 		}
-
-		cout<<"TSC frequency: "<< rte_get_tsc_hz() << endl;
-		uint64_t tsc1 = rte_rdtsc();
-		usleep(500);
-		uint64_t tsc2 = rte_rdtsc();
-		cout<<"tsc1: "<<tsc1<<" tsc2: "<<tsc2<<" diff: "<<tsc2-tsc1<<endl;
-	
-
 	}
 
 out:
