@@ -233,7 +233,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 			for (allocated_packets = 0; allocated_packets < TX_BURST; allocated_packets++)
 			{
-				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[port0->m_port_id]);
+				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(port0->m_pool);
 				if (!pktmbuf)
 				{
 					cout<<"Failed to allocate pktmbuf!"<<endl;
@@ -364,7 +364,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 			for (allocated_packets = 0; allocated_packets < TX_BURST; allocated_packets++)
 			{
-				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(mempools_vector[port1->m_port_id]);
+				struct rte_mbuf *pktmbuf = rte_pktmbuf_alloc(port1->m_pool);
 				if (!pktmbuf)
 				{
 					cout<<"Failed to allocate pktmbuf!"<<endl;

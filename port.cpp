@@ -8,7 +8,6 @@ const uint16_t NUM_BUFFERS = 1024*50;
 
 
 unsigned int num_sockets;
-vector<struct rte_mempool *> mempools_vector;
 bool tx_running;
 bool rx_running;
 
@@ -34,7 +33,6 @@ static struct rte_eth_conf port_conf_default = {
 // TODO: Calculate number of queues according to number of lcores
 int Port::init(int num_queues, PortConfig *config) {
 	int ret;
-	struct rte_mempool *pool;
 	struct rte_eth_dev_info query_info;
 
 	rx_queues = tx_queues = num_queues;
@@ -57,8 +55,14 @@ int Port::init(int num_queues, PortConfig *config) {
 
 	m_config = config;
 
-	pool = mempools_vector[m_port_id];
-	
+	string pool_name = string("pool_port");
+	pool_name = pool_name + to_string(m_port_id);
+	m_pool = rte_pktmbuf_pool_create(pool_name.c_str(),
+							NUM_BUFFERS, MEMPOOL_CACHE_SIZE,
+					0, RTE_MBUF_DEFAULT_BUF_SIZE, m_socket_id);
+	if (m_pool == nullptr)
+		rte_exit(EXIT_FAILURE, "Failed to init memory pool\n");
+
 	for (int queue = 0; queue < rx_queues; queue++) {
 		ret = rte_eth_rx_queue_setup(
 			m_port_id,
@@ -66,7 +70,7 @@ int Port::init(int num_queues, PortConfig *config) {
 			RX_RING_SIZE,
 			m_socket_id,
 			NULL,
-			pool);
+			m_pool);
 
 		if (ret < 0)
 			return ret;
@@ -90,7 +94,8 @@ int Port::init(int num_queues, PortConfig *config) {
 		return ret;
 
 	rte_eth_promiscuous_enable(m_port_id);
-m_initialized = true;
+	m_initialized = true;
+
 	return 0;
 }
 

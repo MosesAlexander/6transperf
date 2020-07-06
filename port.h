@@ -49,7 +49,6 @@
 using namespace std;
 
 extern unsigned int num_sockets;
-extern vector<struct rte_mempool *> mempools_vector;
 extern uint16_t ports_ids[RTE_MAX_ETHPORTS];
 extern bool tx_running;
 extern bool rx_running;
@@ -128,6 +127,7 @@ public:
 	queue<int> tx_queue_index;
 	mutex rx_queue_mutex;
 	mutex tx_queue_mutex;
+	struct rte_mempool *m_pool;
 
 	uint8_t mac_addr[6];
 	int init(int num_queues, PortConfig *config);

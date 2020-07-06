@@ -410,36 +410,6 @@ int main(int argc, char **argv)
 	router->port0_lcore_mask = ports_lcore_mask[0];
 	router->port1_lcore_mask = ports_lcore_mask[1];
 
-	for (int i = 0; i < num_sockets; i++) {
-		string pool_name = string("pool_");
-		pool_name = pool_name + to_string(i);
-		struct rte_mempool *pool = rte_pktmbuf_pool_create(pool_name.c_str(),
-								NUM_BUFFERS, MEMPOOL_CACHE_SIZE,
-						0, RTE_MBUF_DEFAULT_BUF_SIZE, i);
-		if (pool == nullptr)
-			rte_exit(EXIT_FAILURE, "Failed to init memory pool\n");
-
-		mempools_vector.push_back(pool);
-	}
-
-	if (num_sockets == 1 && num_ports > 1)
-	{
-		for (int i = 1; i < num_ports; i++)
-		{
-			string pool_name = string("pool_");
-			pool_name = pool_name + to_string(i);
-			struct rte_mempool *pool = rte_pktmbuf_pool_create(pool_name.c_str(),
-									NUM_BUFFERS, MEMPOOL_CACHE_SIZE,
-							0, RTE_MBUF_DEFAULT_BUF_SIZE, 0);
-			if (pool == nullptr)
-				rte_exit(EXIT_FAILURE, "Failed to init memory pool\n");
-
-			mempools_vector.push_back(pool);
-		}
-
-	}
-
-
 	for (int i = 0; i < num_ports; i++)
 	{
 		Port *port = new Port(i);
@@ -536,11 +506,11 @@ int main(int argc, char **argv)
 		<<" frames ("<<total_tx_port1 * buffer_length<<" bytes, "
 		<<total_tx_port1 * buffer_length * 8<<" bits)"<<endl;
 
-	uint64_t local_drop = total_tx_port1 - total_rx_port0;
-	uint64_t tunnel_drop = total_tx_port0 - total_rx_port1;
+	uint64_t port0_drop = total_tx_port1 - total_rx_port0;
+	uint64_t port1_drop = total_tx_port0 - total_rx_port1;
 	cout<<endl;
-	cout<<"Port 0 dropped frames: "<<local_drop<<"("<<(100*(double)local_drop)/(double)total_tx_port1<<"%)"<<endl;
-	cout<<"Port 1 dropped frames: "<<tunnel_drop<<"("<<(100*(double)tunnel_drop)/(double)total_tx_port0<<"%)"<<endl;
+	cout<<"Port 0 dropped frames: "<<port0_drop<<"("<<(100*(double)port0_drop)/(double)total_tx_port1<<"%)"<<endl;
+	cout<<"Port 1 dropped frames: "<<port1_drop<<"("<<(100*(double)port1_drop)/(double)total_tx_port0<<"%)"<<endl;
 
 	// Calculate Latency, PDV, IPDV
 	double median_port0;
