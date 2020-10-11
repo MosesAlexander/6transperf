@@ -31,14 +31,21 @@ inline bool verify_ip_packet(char *buf)
 		return false;
 }
 
-inline uint64_t extract_ip_send_timestamp(char *buf)
+inline uint64_t extract_ip_pkt_id(char *buf)
 {
 	uint64_t *data = (uint64_t *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv4_hdr))+(sizeof(struct udp_hdr)) + 8);
 
 	return *data;
 }
 
-inline uint64_t extract_ipip6_send_timestamp(char *buf)
+inline uint64_t extract_ip_queue_id(char *buf)
+{
+	uint64_t *data = (uint64_t *)(buf+(sizeof(struct ether_hdr))+(sizeof(struct ipv4_hdr))+(sizeof(struct udp_hdr)) + 16);
+
+	return *data;
+}
+
+inline uint64_t extract_ipip6_pkt_id(char *buf)
 {
 	uint64_t *data = (uint64_t *) (buf+
 			(sizeof(struct ether_hdr))+
@@ -48,6 +55,20 @@ inline uint64_t extract_ipip6_send_timestamp(char *buf)
 			(sizeof(struct ip6_opt_padn))+
 			(sizeof(struct ipv4_hdr))+
 			(sizeof(struct udp_hdr)) + 8);
+
+	return *data;
+}
+
+inline uint64_t extract_ipip6_queue_id(char *buf)
+{
+	uint64_t *data = (uint64_t *) (buf+
+			(sizeof(struct ether_hdr))+
+			(sizeof(struct ipv6_hdr))+
+			(sizeof(struct ip6_opt))+
+			(sizeof(struct ip6_opt_tunnel))+
+			(sizeof(struct ip6_opt_padn))+
+			(sizeof(struct ipv4_hdr))+
+			(sizeof(struct udp_hdr)) + 16);
 
 	return *data;
 }
@@ -140,7 +161,8 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 	 *  port0_lcore_rx_mask;
 	 *  port0_lcore_tx_mask;
 	 *  port1_lcore_rx_mask;
-	 *  port1_lcore_tx_mask;
+	 *  port1_lcore_tx_mask;Esc
+
 	 *
 	 *  Therefore when operating in tester mode the lcores number should be
 	 *  a multiple of 4, and split evenly between the CPU sockets.
@@ -187,10 +209,15 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 					{
 						port0_stats[queue_num].rx_frames++;
 						if (timestamp_all_packets) {
-							port0_tsc_pairs_array[queue_num][port0_tsc_pairs_index[queue_num]].rx_tsc_value = received_tsc;
-							port0_tsc_pairs_array[queue_num][port0_tsc_pairs_index[queue_num]++].tx_tsc_value = port1->m_config->is_ipip6_tun_intf?
-																		extract_ipip6_send_timestamp(buf):
-																		extract_ip_send_timestamp(buf);
+							uint64_t qnum, pktid;
+							if (port1->m_config->is_ipip6_tun_intf) {
+								qnum = extract_ipip6_queue_id(buf);
+								pktid = extract_ipip6_pkt_id(buf);
+							} else {
+								qnum  = extract_ip_queue_id(buf);
+								pktid = extract_ip_pkt_id(buf);
+							}
+							port1_tsc_pairs_array[qnum][pktid].rx_tsc_value = received_tsc;
 						}
 					}
 				}
@@ -246,12 +273,13 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				{
 					if (port0->m_config->is_ipip6_tun_intf)
 					{
-						construct_ipip6_packet(port0->m_config, buf, buf_len, timestamp_all_packets);
+						construct_ipip6_packet(port0->m_config, buf, buf_len, timestamp_all_packets, port0->port_pkt_identifier[queue_num], queue_num);
 					}
 					else 
 					{
-						construct_ip_packet(port0->m_config, buf, buf_len, timestamp_all_packets);
+						construct_ip_packet(port0->m_config, buf, buf_len, timestamp_all_packets, port0->port_pkt_identifier[queue_num], queue_num);
 					}
+
 				}
 
 				pktsbuf[allocated_packets] = pktmbuf;
@@ -259,6 +287,8 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 			/* Send burst of TX packets, to second port of pair. */
 			uint16_t nb_tx = rte_eth_tx_burst(port0->m_port_id, queue_num, pktsbuf, TX_BURST);
+
+			port0_tsc_pairs_array[queue_num][port0->port_pkt_identifier[queue_num]++].tx_tsc_value = rte_rdtsc();
 
 			port0_stats[queue_num].tx_frames += nb_tx;
 
@@ -317,11 +347,17 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 					{
 						port1_stats[queue_num].rx_frames++;
 						if (timestamp_all_packets) {
-							port1_tsc_pairs_array[queue_num][port1_tsc_pairs_index[queue_num]].rx_tsc_value = received_tsc;
-							port1_tsc_pairs_array[queue_num][port1_tsc_pairs_index[queue_num]++].tx_tsc_value = port0->m_config->is_ipip6_tun_intf ?
-																		extract_ipip6_send_timestamp(buf):
-																		extract_ip_send_timestamp(buf);
+							uint64_t qnum, pktid;
+							if (port0->m_config->is_ipip6_tun_intf) {
+								qnum = extract_ipip6_queue_id(buf);
+								pktid = extract_ipip6_pkt_id(buf);
+							} else {
+								qnum  = extract_ip_queue_id(buf);
+								pktid = extract_ip_pkt_id(buf);
+							}
+							port0_tsc_pairs_array[qnum][pktid].rx_tsc_value = received_tsc;
 						}
+
 					}
 				}
 
@@ -377,12 +413,13 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				{
 					if (port1->m_config->is_ipip6_tun_intf)
 					{
-						construct_ipip6_packet(port1->m_config, buf, buf_len, timestamp_all_packets);
+						construct_ipip6_packet(port1->m_config, buf, buf_len, timestamp_all_packets, port1->port_pkt_identifier[queue_num], queue_num);
 					}
 					else
 					{
-						construct_ip_packet(port1->m_config, buf, buf_len, timestamp_all_packets);
+						construct_ip_packet(port1->m_config, buf, buf_len, timestamp_all_packets, port1->port_pkt_identifier[queue_num], queue_num);
 					}
+
 				}
 
 				pktsbuf[allocated_packets] = pktmbuf;
@@ -390,6 +427,8 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 			/* Send burst of TX packets, to second port of pair. */
 			uint16_t nb_tx = rte_eth_tx_burst(port1->m_port_id, queue_num, pktsbuf, TX_BURST);
+
+			port1_tsc_pairs_array[queue_num][port1->port_pkt_identifier[queue_num]++].tx_tsc_value = rte_rdtsc();
 
 			port1_stats[queue_num].tx_frames += nb_tx;
 
@@ -415,20 +454,6 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 void DSLiteTester::set_ports_from_config(void)
 {
-	/*
-	   I might have been drunk when I wrote this...
-	if (ports_vector[0]->m_config->is_ipip6_tun_intf) {
-		port1 = ports_vector[0];
-		port0 = ports_vector[1];
-		port1_mask = port0_lcore_mask;
-		port0_mask = port1_lcore_mask;
-	} else if (ports_vector[1]->m_config->is_ipip6_tun_intf) {
-		port1 = ports_vector[1];
-		port0 = ports_vector[0];
-		port1_mask = port1_lcore_mask;
-		port0_mask = port0_lcore_mask;
-	}
-	*/
 	port0 = ports_vector[0];
 	port1 = ports_vector[1];
 	port0_mask = port0_lcore_mask;

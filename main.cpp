@@ -306,7 +306,7 @@ int main(int argc, char **argv)
 		if (argv[i] == string("--mode"))
 		{
 			mode_selected = true;
-			if (string(argv[i+1]) == string("tester"))
+			if (string(argv[i+1]) == string("dslite"))
 			{
 				op_mode = TESTER_CONFIG;
 				router = new DSLiteTester();
@@ -384,8 +384,6 @@ int main(int argc, char **argv)
 		router->num_tsc_pairs_per_qp = ((target_rate_bps * 1.25 / (8 * buffer_length)) * duration) / num_queues;
 		router->port0_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
 		router->port1_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
-		router->port0_tsc_pairs_index = (uint64_t*) malloc(num_queues * sizeof(uint64_t));
-		router->port1_tsc_pairs_index = (uint64_t*) malloc(num_queues * sizeof(uint64_t));
 
 		for (int i = 0; i < num_queues; i++) {
 			router->port0_tsc_pairs_array[i] = (struct timestamp_pair *) mmap(NULL, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair),
@@ -395,8 +393,6 @@ int main(int argc, char **argv)
 
 			memset(router->port0_tsc_pairs_array[i], 0, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair));
 			memset(router->port1_tsc_pairs_array[i], 0, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair));
-			router->port0_tsc_pairs_index[i] = 0;
-			router->port1_tsc_pairs_index[i] = 0;
 		}
 
 		cout<<"Allocated " << router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair) * 4 << " bytes in total for timestamps."<<endl;
@@ -534,16 +530,16 @@ int main(int argc, char **argv)
 	if (timestamp_all_packets) {
 		if (test_type == TEST_LAT || test_type == TEST_PDV)
 		{
-			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->port0_tsc_pairs_index, num_queues);
-			merged_array_size = get_merged_array_size(router->port0_tsc_pairs_index, num_queues);
+			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->ports_vector[0]->port_pkt_identifier, num_queues);
+			merged_array_size = get_merged_array_size(router->ports_vector[0]->port_pkt_identifier, num_queues);
 			sort_latencies_array(latencies_array_merged, merged_array_size);
 			median_port0 = median_of_latencies<uint64_t>(latencies_array_merged, merged_array_size);
 			port0_wcl = calculate_wcl(latencies_array_merged, merged_array_size);
 			port0_pdv = calculate_pdv(latencies_array_merged, merged_array_size);
 			free(latencies_array_merged);
 
-			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port1_tsc_pairs_array, router->port1_tsc_pairs_index, num_queues);
-			merged_array_size = get_merged_array_size(router->port1_tsc_pairs_index, num_queues);
+			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port1_tsc_pairs_array, router->ports_vector[1]->port_pkt_identifier, num_queues);
+			merged_array_size = get_merged_array_size(router->ports_vector[1]->port_pkt_identifier, num_queues);
 			sort_latencies_array(latencies_array_merged, merged_array_size);
 			median_port1 = median_of_latencies<uint64_t>(latencies_array_merged, merged_array_size);
 			port1_wcl = calculate_wcl(latencies_array_merged, merged_array_size);
@@ -561,8 +557,8 @@ int main(int argc, char **argv)
 		}
 		else if (test_type == TEST_IPDV)
 		{
-			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->port0_tsc_pairs_index, num_queues);
-			merged_array_size = get_merged_array_size(router->port0_tsc_pairs_index, num_queues);
+			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->ports_vector[0]->port_pkt_identifier, num_queues);
+			merged_array_size = get_merged_array_size(router->ports_vector[0]->port_pkt_identifier, num_queues);
 			ipdv_array = generate_ipdv_array_from_latencies_array(latencies_array_merged, merged_array_size);
 			sort_ipdv_array(ipdv_array, merged_array_size-1);
 			port0_min_ipdv = ipdv_array[0];
@@ -570,8 +566,8 @@ int main(int argc, char **argv)
 			port0_max_ipdv = ipdv_array[merged_array_size-2]; // Last element in ipdv array is the max
 			free(ipdv_array);
 
-			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port1_tsc_pairs_array, router->port1_tsc_pairs_index, num_queues);
-			merged_array_size = get_merged_array_size(router->port1_tsc_pairs_index, num_queues);
+			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port1_tsc_pairs_array, router->ports_vector[1]->port_pkt_identifier, num_queues);
+			merged_array_size = get_merged_array_size(router->ports_vector[1]->port_pkt_identifier, num_queues);
 			ipdv_array = generate_ipdv_array_from_latencies_array(latencies_array_merged, merged_array_size);
 			sort_ipdv_array(ipdv_array, merged_array_size-1);
 			port1_min_ipdv = ipdv_array[0];

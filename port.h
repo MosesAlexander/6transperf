@@ -125,6 +125,8 @@ public:
 	PortConfig *m_config;
 	queue<int> rx_queue_index;
 	queue<int> tx_queue_index;
+	// one per queue pair
+	uint64_t *port_pkt_identifier;
 	mutex rx_queue_mutex;
 	mutex tx_queue_mutex;
 	struct rte_mempool *m_pool;

@@ -37,6 +37,10 @@ int Port::init(int num_queues, PortConfig *config) {
 
 	rx_queues = tx_queues = num_queues;
 
+	port_pkt_identifier = (uint64_t *) malloc(sizeof(uint64_t) * num_queues);
+
+	memset(port_pkt_identifier, 0, sizeof(uint64_t) * num_queues);
+
 	for (int i = 0; i < num_queues; i++)
 	{
 		rx_queue_index.push(i);
