@@ -339,7 +339,6 @@ void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len, boo
 	data[0] = 0x811136ee17e;
 	data[1] = pkt_id;
 	data[2] = queue_id;
-	data[3] = 0xfafafafafafafafaULL;
 }
 
 void Router::add_port(Port *port)
