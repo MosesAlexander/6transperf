@@ -74,7 +74,7 @@ public:
 	uint64_t *port1_tsc_pairs_index;
 	struct timestamp_pair **port0_tsc_pairs_array;
 	struct timestamp_pair **port1_tsc_pairs_array;
-	bool timestamp_all_packets = false;
+	bool timestamp_packets = false;
 	bool timestamp_500_packets = false;
 
 	// When this counter is equal to the number of total rx queues
@@ -83,9 +83,9 @@ public:
 
 	void encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len);
 	void decapsulate_ipip6_packet(PortConfig *config, char *buf);
-	void construct_ip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets, uint64_t pkt_id, uint64_t queue_id);
-	void construct_ip_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets, uint64_t pkt_id, uint64_t queue_id);
-	void construct_ipip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_all_packets, uint64_t pkt_id, uint64_t queue_id);
+	void construct_ip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id);
+	void construct_ip_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id);
+	void construct_ipip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id);
 	virtual void set_lcore_allocation(uint64_t port0_mask, uint64_t port1_mask) { }
 	virtual void set_ports_from_config(void) { }
 

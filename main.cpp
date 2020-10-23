@@ -244,7 +244,7 @@ int main(int argc, char **argv)
 	uint64_t ports_lcore_mask[2];
 	bool mode_selected = false;
 	uint32_t duration = 10; // seconds
-	bool timestamp_all_packets = false;
+	bool timestamp_packets = false;
 	test_type_t test_type = TEST_LAT;
 
 
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
 
 		if (argv[i] == string("--timestamp-all-packets"))
 		{
-			timestamp_all_packets = true;
+			timestamp_packets = true;
 		}
 
 		if (argv[i] == string("--packet-len"))
@@ -379,8 +379,8 @@ int main(int argc, char **argv)
 	}
 
 	// preallocate buffer space for 
-	if (timestamp_all_packets) {
-		router->timestamp_all_packets = timestamp_all_packets;
+	if (timestamp_packets) {
+		router->timestamp_packets = timestamp_packets;
 		router->num_tsc_pairs_per_qp = ((target_rate_bps * 1.25 / (8 * buffer_length)) * duration) / num_queues;
 		router->port0_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
 		router->port1_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
@@ -527,7 +527,7 @@ int main(int argc, char **argv)
 
 
 	
-	if (timestamp_all_packets) {
+	if (timestamp_packets) {
 		if (test_type == TEST_LAT || test_type == TEST_PDV)
 		{
 			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->ports_vector[0]->port_pkt_identifier, num_queues);

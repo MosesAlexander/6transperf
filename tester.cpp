@@ -208,7 +208,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 					if (port1->m_config->is_ipip6_tun_intf? verify_ipip6_packet(buf) : verify_ip_packet(buf))
 					{
 						port0_stats[queue_num].rx_frames++;
-						if (timestamp_all_packets) {
+						if (timestamp_packets) {
 							uint64_t qnum, pktid;
 							if (port1->m_config->is_ipip6_tun_intf) {
 								qnum = extract_ipip6_queue_id(buf);
@@ -273,11 +273,11 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				{
 					if (port0->m_config->is_ipip6_tun_intf)
 					{
-						construct_ipip6_packet(port0->m_config, buf, buf_len, timestamp_all_packets, port0->port_pkt_identifier[queue_num], queue_num);
+						construct_ipip6_packet(port0->m_config, buf, buf_len, timestamp_packets, port0->port_pkt_identifier[queue_num], queue_num);
 					}
 					else 
 					{
-						construct_ip_packet(port0->m_config, buf, buf_len, timestamp_all_packets, port0->port_pkt_identifier[queue_num], queue_num);
+						construct_ip_packet(port0->m_config, buf, buf_len, timestamp_packets, port0->port_pkt_identifier[queue_num], queue_num);
 					}
 
 				}
@@ -288,7 +288,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			/* Send burst of TX packets, to second port of pair. */
 			uint16_t nb_tx = rte_eth_tx_burst(port0->m_port_id, queue_num, pktsbuf, TX_BURST);
 
-			port0_tsc_pairs_array[queue_num][port0->port_pkt_identifier[queue_num]++].tx_tsc_value = rte_rdtsc();
+			if (timestamp_packets) {
+				port0_tsc_pairs_array[queue_num][port0->port_pkt_identifier[queue_num]++].tx_tsc_value = rte_rdtsc();
+			}
 
 			port0_stats[queue_num].tx_frames += nb_tx;
 
@@ -346,7 +348,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 					if (port0->m_config->is_ipip6_tun_intf? verify_ipip6_packet(buf) : verify_ip_packet(buf))
 					{
 						port1_stats[queue_num].rx_frames++;
-						if (timestamp_all_packets) {
+						if (timestamp_packets) {
 							uint64_t qnum, pktid;
 							if (port0->m_config->is_ipip6_tun_intf) {
 								qnum = extract_ipip6_queue_id(buf);
@@ -413,11 +415,11 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				{
 					if (port1->m_config->is_ipip6_tun_intf)
 					{
-						construct_ipip6_packet(port1->m_config, buf, buf_len, timestamp_all_packets, port1->port_pkt_identifier[queue_num], queue_num);
+						construct_ipip6_packet(port1->m_config, buf, buf_len, timestamp_packets, port1->port_pkt_identifier[queue_num], queue_num);
 					}
 					else
 					{
-						construct_ip_packet(port1->m_config, buf, buf_len, timestamp_all_packets, port1->port_pkt_identifier[queue_num], queue_num);
+						construct_ip_packet(port1->m_config, buf, buf_len, timestamp_packets, port1->port_pkt_identifier[queue_num], queue_num);
 					}
 
 				}
@@ -428,7 +430,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 			/* Send burst of TX packets, to second port of pair. */
 			uint16_t nb_tx = rte_eth_tx_burst(port1->m_port_id, queue_num, pktsbuf, TX_BURST);
 
-			port1_tsc_pairs_array[queue_num][port1->port_pkt_identifier[queue_num]++].tx_tsc_value = rte_rdtsc();
+			if (timestamp_packets) {
+				port1_tsc_pairs_array[queue_num][port1->port_pkt_identifier[queue_num]++].tx_tsc_value = rte_rdtsc();
+			}
 
 			port1_stats[queue_num].tx_frames += nb_tx;
 
