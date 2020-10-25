@@ -26,7 +26,7 @@ enum dslite_test_mode_t {
 	SELFTEST,
 };
 
-class DSLiteTester : public Router
+class DSLiteTester : public Tester
 {
 public:
 	uint64_t port0_lcore_rx_mask;

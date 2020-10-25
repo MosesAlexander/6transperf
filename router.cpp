@@ -21,7 +21,7 @@
 static uint16_t id_gen = 0;
 static uint16_t id_gen_ipip6 = 0;
 
-void Router::encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len)
+void Tester::encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len)
 {
 	struct ether_hdr *ethhdr;
 	struct ipv6_hdr *ip6_hdr;
@@ -71,7 +71,7 @@ void Router::encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len
 	padn->padn[0] = 0x0;
 }
 
-void Router::decapsulate_ipip6_packet(PortConfig *config, char *buf)
+void Tester::decapsulate_ipip6_packet(PortConfig *config, char *buf)
 {
 	struct ether_hdr *ethhdr;
 
@@ -84,7 +84,7 @@ void Router::decapsulate_ipip6_packet(PortConfig *config, char *buf)
 	ethhdr->ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
 }
 
-void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id)
+void Tester::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id)
 {
 	uint16_t *ptr16;
 	uint32_t ip_cksum;
@@ -223,7 +223,7 @@ void Router::construct_ipip6_packet(PortConfig *config, char *buf, int buf_len, 
 	//udp_hdr->dgram_cksum    = rte_ipv6_udptcp_cksum(ip_hdr, (void*)udp_hdr); /* No UDP checksum. */
 }
 
-void Router::construct_ip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id)
+void Tester::construct_ip6_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id)
 {
 	struct ether_hdr *hdr;
 	uint16_t *ptr16;
@@ -270,7 +270,7 @@ void Router::construct_ip6_packet(PortConfig *config, char *buf, int buf_len, bo
 
 }
 
-void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id)
+void Tester::construct_ip_packet(PortConfig *config, char *buf, int buf_len, bool timestamp_packets, uint64_t pkt_id, uint64_t queue_id)
 {
 	struct ether_hdr *hdr;
 	uint16_t *ptr16;
@@ -341,7 +341,7 @@ void Router::construct_ip_packet(PortConfig *config, char *buf, int buf_len, boo
 	data[2] = queue_id;
 }
 
-void Router::add_port(Port *port)
+void Tester::add_port(Port *port)
 {
 	ports_vector.push_back(port);
 }

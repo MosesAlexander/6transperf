@@ -57,7 +57,7 @@ struct timestamp_pair
 	uint64_t tx_tsc_value;
 };
 
-class Router
+class Tester
 {
 public:
 	vector<Port *> ports_vector;
@@ -91,7 +91,7 @@ public:
 
 	void add_port(Port * port);
 
-	virtual ~Router() = default;
+	virtual ~Tester() = default;
 };
 
 #endif /* ROUTER_H */

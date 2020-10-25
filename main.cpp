@@ -26,7 +26,7 @@ using namespace std;
 config_type_t op_mode = TESTER_CONFIG; // tester config is default
 dslite_test_mode_t dslite_test_mode = AFTR;
 
-Router *router;
+Tester *tester;
 int num_queues = 1;
 
 // 1Gbps rate is the default
@@ -51,10 +51,10 @@ static void signal_handler(int signum)
 	{
 		for (int i = 0; i < num_queues; i++)
 		{
-			cout<<"Port 0 queue "<<i<<": rx: " <<std::dec<<router->port0_stats[i].rx_frames;
-			cout<<" tx: "<<std::dec<<router->port0_stats[i].tx_frames<<endl;
-			cout<<"Port 1 queue "<<i<<": rx: " <<std::dec<<router->port1_stats[i].rx_frames;
-			cout<<" tx: " <<std::dec<<router->port1_stats[i].tx_frames<<endl;
+			cout<<"Port 0 queue "<<i<<": rx: " <<std::dec<<tester->port0_stats[i].rx_frames;
+			cout<<" tx: "<<std::dec<<tester->port0_stats[i].tx_frames<<endl;
+			cout<<"Port 1 queue "<<i<<": rx: " <<std::dec<<tester->port1_stats[i].rx_frames;
+			cout<<" tx: " <<std::dec<<tester->port1_stats[i].tx_frames<<endl;
 		}
 	}
 }
@@ -65,13 +65,13 @@ traffic_lcore_thread(void *arg __rte_unused)
 	switch (op_mode)
 	{
 	case TESTER_CONFIG:
-		dynamic_cast<DSLiteTester*>(router)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
+		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
 		break;
 	case B4_CONFIG:
-		dynamic_cast<DSLiteTester*>(router)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
+		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
 		break;
 	case AFTR_CONFIG:
-		dynamic_cast<DSLiteTester*>(router)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
+		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
 		break;
 	}
 
@@ -310,13 +310,13 @@ int main(int argc, char **argv)
 			mode_selected = true;
 			if (string(argv[i+1]) == string("dslite"))
 			{
-				router = new DSLiteTester();
+				tester = new DSLiteTester();
 			}
 			else
 			{
 				cout<<"No mode selected, choosing Tester as default"<<endl;
 				op_mode = TESTER_CONFIG;
-				router = new DSLiteTester();
+				tester = new DSLiteTester();
 			}
 		}
 
@@ -376,28 +376,28 @@ int main(int argc, char **argv)
 	if (!mode_selected)
 	{
 		op_mode = TESTER_CONFIG;
-		router = new DSLiteTester();
+		tester = new DSLiteTester();
 
 	}
 
 	// preallocate buffer space for 
 	if (timestamp_packets) {
-		router->timestamp_packets = timestamp_packets;
-		router->num_tsc_pairs_per_qp = ((target_rate_bps * 1.25 / (8 * buffer_length)) * duration) / num_queues;
-		router->port0_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
-		router->port1_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
+		tester->timestamp_packets = timestamp_packets;
+		tester->num_tsc_pairs_per_qp = ((target_rate_bps * 1.25 / (8 * buffer_length)) * duration) / num_queues;
+		tester->port0_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
+		tester->port1_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
 
 		for (int i = 0; i < num_queues; i++) {
-			router->port0_tsc_pairs_array[i] = (struct timestamp_pair *) mmap(NULL, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair),
+			tester->port0_tsc_pairs_array[i] = (struct timestamp_pair *) mmap(NULL, tester->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair),
 					PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
-			router->port1_tsc_pairs_array[i] = (struct timestamp_pair *) mmap(NULL, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair),
+			tester->port1_tsc_pairs_array[i] = (struct timestamp_pair *) mmap(NULL, tester->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair),
 					PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
 
-			memset(router->port0_tsc_pairs_array[i], 0, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair));
-			memset(router->port1_tsc_pairs_array[i], 0, router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair));
+			memset(tester->port0_tsc_pairs_array[i], 0, tester->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair));
+			memset(tester->port1_tsc_pairs_array[i], 0, tester->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair));
 		}
 
-		cout<<"Allocated " << router->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair) * 4 << " bytes in total for timestamps."<<endl;
+		cout<<"Allocated " << tester->num_tsc_pairs_per_qp * sizeof(struct timestamp_pair) * 4 << " bytes in total for timestamps."<<endl;
 	}
 
 	// Spread the bandwith accross the queues
@@ -405,8 +405,8 @@ int main(int argc, char **argv)
 
 	num_sockets = rte_socket_count();
 	//TODO: Must support more lcores than 64
-	router->port0_lcore_mask = ports_lcore_mask[0];
-	router->port1_lcore_mask = ports_lcore_mask[1];
+	tester->port0_lcore_mask = ports_lcore_mask[0];
+	tester->port1_lcore_mask = ports_lcore_mask[1];
 
 	for (int i = 0; i < num_ports; i++)
 	{
@@ -426,10 +426,10 @@ int main(int argc, char **argv)
 							<< std::hex << std::setfill('0') << std::setw(2)
 							<< (unsigned int)port->mac_addr[5] << endl;
 
-		router->add_port(port);
+		tester->add_port(port);
 	}
 
-	router->set_ports_from_config();
+	tester->set_ports_from_config();
 
 	tx_running = true;
 	rx_running = true;
@@ -449,25 +449,25 @@ int main(int argc, char **argv)
 	// Port 0
 	for (int i = 0; i < num_queues; i++)
 	{
-		cout<<"Port 0 queue "<<i<<":"<<endl<<"rx: " <<std::dec<<router->port0_stats[i].rx_frames
-			<<" frames ("<<router->port0_stats[i].rx_frames * buffer_length<<" bytes, "
-			<<router->port0_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
-		cout<<"tx: "<<std::dec<<router->port0_stats[i].tx_frames
-			<<" frames ("<<router->port0_stats[i].tx_frames * buffer_length<<" bytes, "
-			<<router->port0_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
+		cout<<"Port 0 queue "<<i<<":"<<endl<<"rx: " <<std::dec<<tester->port0_stats[i].rx_frames
+			<<" frames ("<<tester->port0_stats[i].rx_frames * buffer_length<<" bytes, "
+			<<tester->port0_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
+		cout<<"tx: "<<std::dec<<tester->port0_stats[i].tx_frames
+			<<" frames ("<<tester->port0_stats[i].tx_frames * buffer_length<<" bytes, "
+			<<tester->port0_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
 	}
 
 	std::cout<<std::endl;
 	// Port 1
 	for (int i = 0; i < num_queues; i++)
 	{
-		cout<<"Port 1 queue "<<i<<":"<<endl<<"rx: " <<std::dec<<router->port1_stats[i].rx_frames
-			<<" frames ("<<std::dec<<router->port1_stats[i].rx_frames * buffer_length<<" bytes, "
-			<<router->port1_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
+		cout<<"Port 1 queue "<<i<<":"<<endl<<"rx: " <<std::dec<<tester->port1_stats[i].rx_frames
+			<<" frames ("<<std::dec<<tester->port1_stats[i].rx_frames * buffer_length<<" bytes, "
+			<<tester->port1_stats[i].rx_frames * buffer_length * 8<<" bits)"<<endl;
 
-		cout<<"tx: "<<std::dec<<router->port1_stats[i].tx_frames
-			<<" frames ("<<router->port1_stats[i].tx_frames * buffer_length<<" bytes, "
-			<<router->port1_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
+		cout<<"tx: "<<std::dec<<tester->port1_stats[i].tx_frames
+			<<" frames ("<<tester->port1_stats[i].tx_frames * buffer_length<<" bytes, "
+			<<tester->port1_stats[i].tx_frames * buffer_length * 8<<" bits)"<<endl;
 
 	}
 
@@ -478,10 +478,10 @@ int main(int argc, char **argv)
 
 	for (int i = 0; i < num_queues; i++)
 	{
-		total_rx_port0 += router->port0_stats[i].rx_frames;
-		total_tx_port0 += router->port0_stats[i].tx_frames;
-		total_rx_port1 += router->port1_stats[i].rx_frames;
-		total_tx_port1 += router->port1_stats[i].tx_frames;
+		total_rx_port0 += tester->port0_stats[i].rx_frames;
+		total_tx_port0 += tester->port0_stats[i].tx_frames;
+		total_rx_port1 += tester->port1_stats[i].rx_frames;
+		total_tx_port1 += tester->port1_stats[i].tx_frames;
 	}
 
 	std::cout<<std::endl;
@@ -532,16 +532,16 @@ int main(int argc, char **argv)
 	if (timestamp_packets) {
 		if (test_type == TEST_LAT || test_type == TEST_PDV)
 		{
-			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->ports_vector[0]->port_pkt_identifier, num_queues);
-			merged_array_size = get_merged_array_size(router->ports_vector[0]->port_pkt_identifier, num_queues);
+			latencies_array_merged = merge_tsc_arrays_into_latencies(tester->port0_tsc_pairs_array, tester->ports_vector[0]->port_pkt_identifier, num_queues);
+			merged_array_size = get_merged_array_size(tester->ports_vector[0]->port_pkt_identifier, num_queues);
 			sort_latencies_array(latencies_array_merged, merged_array_size);
 			median_port0 = median_of_latencies<uint64_t>(latencies_array_merged, merged_array_size);
 			port0_wcl = calculate_wcl(latencies_array_merged, merged_array_size);
 			port0_pdv = calculate_pdv(latencies_array_merged, merged_array_size);
 			free(latencies_array_merged);
 
-			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port1_tsc_pairs_array, router->ports_vector[1]->port_pkt_identifier, num_queues);
-			merged_array_size = get_merged_array_size(router->ports_vector[1]->port_pkt_identifier, num_queues);
+			latencies_array_merged = merge_tsc_arrays_into_latencies(tester->port1_tsc_pairs_array, tester->ports_vector[1]->port_pkt_identifier, num_queues);
+			merged_array_size = get_merged_array_size(tester->ports_vector[1]->port_pkt_identifier, num_queues);
 			sort_latencies_array(latencies_array_merged, merged_array_size);
 			median_port1 = median_of_latencies<uint64_t>(latencies_array_merged, merged_array_size);
 			port1_wcl = calculate_wcl(latencies_array_merged, merged_array_size);
@@ -559,8 +559,8 @@ int main(int argc, char **argv)
 		}
 		else if (test_type == TEST_IPDV)
 		{
-			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port0_tsc_pairs_array, router->ports_vector[0]->port_pkt_identifier, num_queues);
-			merged_array_size = get_merged_array_size(router->ports_vector[0]->port_pkt_identifier, num_queues);
+			latencies_array_merged = merge_tsc_arrays_into_latencies(tester->port0_tsc_pairs_array, tester->ports_vector[0]->port_pkt_identifier, num_queues);
+			merged_array_size = get_merged_array_size(tester->ports_vector[0]->port_pkt_identifier, num_queues);
 			ipdv_array = generate_ipdv_array_from_latencies_array(latencies_array_merged, merged_array_size);
 			sort_ipdv_array(ipdv_array, merged_array_size-1);
 			port0_min_ipdv = ipdv_array[0];
@@ -568,8 +568,8 @@ int main(int argc, char **argv)
 			port0_max_ipdv = ipdv_array[merged_array_size-2]; // Last element in ipdv array is the max
 			free(ipdv_array);
 
-			latencies_array_merged = merge_tsc_arrays_into_latencies(router->port1_tsc_pairs_array, router->ports_vector[1]->port_pkt_identifier, num_queues);
-			merged_array_size = get_merged_array_size(router->ports_vector[1]->port_pkt_identifier, num_queues);
+			latencies_array_merged = merge_tsc_arrays_into_latencies(tester->port1_tsc_pairs_array, tester->ports_vector[1]->port_pkt_identifier, num_queues);
+			merged_array_size = get_merged_array_size(tester->ports_vector[1]->port_pkt_identifier, num_queues);
 			ipdv_array = generate_ipdv_array_from_latencies_array(latencies_array_merged, merged_array_size);
 			sort_ipdv_array(ipdv_array, merged_array_size-1);
 			port1_min_ipdv = ipdv_array[0];
