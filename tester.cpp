@@ -54,7 +54,8 @@ inline uint64_t extract_ipip6_pkt_id(char *buf)
 			(sizeof(struct ip6_opt_tunnel))+
 			(sizeof(struct ip6_opt_padn))+
 			(sizeof(struct ipv4_hdr))+
-			(sizeof(struct udp_hdr)) + 8);
+			//(sizeof(struct udp_hdr)) + 8); //TODO: find out why the received packets are 8 bytes minus from expected
+			(sizeof(struct udp_hdr)));
 
 	return *data;
 }
@@ -68,7 +69,8 @@ inline uint64_t extract_ipip6_queue_id(char *buf)
 			(sizeof(struct ip6_opt_tunnel))+
 			(sizeof(struct ip6_opt_padn))+
 			(sizeof(struct ipv4_hdr))+
-			(sizeof(struct udp_hdr)) + 16);
+			// (sizeof(struct udp_hdr)) + 16); //TODO: find out why the received packets are 8 bytes minus from expected
+			(sizeof(struct udp_hdr)) + 8);
 
 	return *data;
 }
@@ -83,7 +85,8 @@ inline bool verify_ipip6_packet(char *buf)
 			(sizeof(struct ip6_opt_tunnel))+
 			(sizeof(struct ip6_opt_padn))+
 			(sizeof(struct ipv4_hdr))+
-			(sizeof(struct udp_hdr)));
+			// (sizeof(struct udp_hdr))); //TODO: find out why the received packets are 8 bytes minus from expected
+			(sizeof(struct udp_hdr)) - 8);
 
 	if (*data == 0x811136ee17e)
 		return true;
@@ -205,12 +208,12 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
 					// if the OTHER port is tunneling, check if we are receiving encapsulated packets
-					if (port1->m_config->is_ipip6_tun_intf? verify_ipip6_packet(buf) : verify_ip_packet(buf))
+					if (port0->m_config->is_ipip6_tun_intf? verify_ipip6_packet(buf) : verify_ip_packet(buf))
 					{
 						port0_stats[queue_num].rx_frames++;
 						if (timestamp_packets) {
 							uint64_t qnum, pktid;
-							if (port1->m_config->is_ipip6_tun_intf) {
+							if (port0->m_config->is_ipip6_tun_intf) {
 								qnum = extract_ipip6_queue_id(buf);
 								pktid = extract_ipip6_pkt_id(buf);
 							} else {
@@ -345,12 +348,12 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 				if (test_mode == AFTR || test_mode == B4 || test_mode == SELFTEST)
 				{
 					// if the OTHER port is tunneling, check if you're receiving encapsulated packets
-					if (port0->m_config->is_ipip6_tun_intf? verify_ipip6_packet(buf) : verify_ip_packet(buf))
+					if (port1->m_config->is_ipip6_tun_intf? verify_ipip6_packet(buf) : verify_ip_packet(buf))
 					{
 						port1_stats[queue_num].rx_frames++;
 						if (timestamp_packets) {
 							uint64_t qnum, pktid;
-							if (port0->m_config->is_ipip6_tun_intf) {
+							if (port1->m_config->is_ipip6_tun_intf) {
 								qnum = extract_ipip6_queue_id(buf);
 								pktid = extract_ipip6_pkt_id(buf);
 							} else {

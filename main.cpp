@@ -68,8 +68,10 @@ traffic_lcore_thread(void *arg __rte_unused)
 		dynamic_cast<DSLiteTester*>(router)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
 		break;
 	case B4_CONFIG:
+		dynamic_cast<DSLiteTester*>(router)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
 		break;
 	case AFTR_CONFIG:
+		dynamic_cast<DSLiteTester*>(router)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
 		break;
 	}
 
@@ -308,7 +310,6 @@ int main(int argc, char **argv)
 			mode_selected = true;
 			if (string(argv[i+1]) == string("dslite"))
 			{
-				op_mode = TESTER_CONFIG;
 				router = new DSLiteTester();
 			}
 			else
@@ -327,6 +328,7 @@ int main(int argc, char **argv)
 			}
 			else if (string(argv[i+1]) == string("b4"))
 			{
+				op_mode = B4_CONFIG;
 				dslite_test_mode = B4;
 			}
 			else if (string(argv[i+1]) == string("both"))
