@@ -88,7 +88,7 @@ inline bool verify_ipip6_packet(char *buf)
 			// (sizeof(struct udp_hdr))); //TODO: find out why the received packets are 8 bytes minus from expected
 			(sizeof(struct udp_hdr)) - 8);
 
-	if (*data == 0x811136ee17e)
+	if (*data == 0x811136ee17e || *(data+1) == 0x811136ee17e)
 		return true;
 	else
 		return false;
@@ -133,29 +133,31 @@ inline bool verify_ipip6_packet(char *buf)
  *      |                                                              |
  *      +--------------------------------------------------------------+
  */
-void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_mode_t test_mode)
+void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_test_mode_t test_mode)
 {
 	int lcore = (int)rte_lcore_id();
 	uint64_t tsc_hz;
 	uint64_t wait_ticks;
 	uint64_t ticks_upper_bound;
-	uint64_t amt_bits;
+	uint64_t frames_per_burst;
 	int total_rx_queues;
+	uint64_t frames_to_send = (tester_duration * target_rate_fps) / m_num_queues;
+	uint64_t *sent_frames = (uint64_t*) malloc(sizeof(uint64_t) * m_num_queues);
 
 	total_rx_queues = port0->rx_queues + port1->rx_queues;
 
 	/*
 	 * The rate calculation:
-	 * number of TSC ticks in 1 sec ...... target rate in bits
-	 * number of ticks to wait ...... amount of bits we send in one burst
+	 * number of TSC ticks in 1 sec ...... target rate in frames
+	 * number of ticks to wait ........... amount of frames we send in one burst
 	 * number of ticks to wait = (TSC ticks in 1 sec * amount of bits per burst) / target rate in bits
 	 */
 
 	tsc_hz = rte_get_tsc_hz();
 
-	amt_bits = TX_BURST * buf_len * 8;
+	frames_per_burst = TX_BURST;
 
-	wait_ticks = tsc_hz * amt_bits / target_rate;
+	wait_ticks = frames_per_burst * tsc_hz / target_rate_fps;
 
 	/*
 	 * We do a 1:1 mapping between queue and lcore, so in the tester case
@@ -164,8 +166,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 	 *  port0_lcore_rx_mask;
 	 *  port0_lcore_tx_mask;
 	 *  port1_lcore_rx_mask;
-	 *  port1_lcore_tx_mask;Esc
-
+	 *  port1_lcore_tx_mask;
 	 *
 	 *  Therefore when operating in tester mode the lcores number should be
 	 *  a multiple of 4, and split evenly between the CPU sockets.
@@ -253,8 +254,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		port0->tx_queue_mutex.unlock();
 
 		while(rx_ready_counter.load() < total_rx_queues);
+		while(tx_delay_flag);
 
-		while (tx_running) {
+		for(sent_frames[queue_num] = 0; sent_frames[queue_num] < frames_to_send; sent_frames[queue_num]++) {
 			struct rte_mbuf *pktsbuf[TX_BURST];
 			int buffer_idx = 0;
 			int allocated_packets, remaining_packets;
@@ -395,8 +397,9 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 		port1->tx_queue_mutex.unlock();
 
 		while(rx_ready_counter.load() < total_rx_queues);
+		while(tx_delay_flag);
 
-		while (tx_running) {
+		for(sent_frames[queue_num] = 0; sent_frames[queue_num] < frames_to_send; sent_frames[queue_num]++) {
 			struct rte_mbuf *pktsbuf[TX_BURST];
 			int buffer_idx = 0;
 			int allocated_packets, remaining_packets;
@@ -457,6 +460,7 @@ void DSLiteTester::runtest(uint64_t target_rate, uint64_t buf_len, dslite_test_m
 
 	}
 
+	free(sent_frames);
 }
 
 void DSLiteTester::set_ports_from_config(void)

@@ -76,10 +76,13 @@ public:
 	struct timestamp_pair **port1_tsc_pairs_array;
 	bool timestamp_packets = false;
 	bool timestamp_500_packets = false;
+	uint64_t tester_duration;
+	uint64_t m_num_queues;
 
 	// When this counter is equal to the number of total rx queues
 	// tx threads will start
 	std::atomic<int> rx_ready_counter {0};
+	bool tx_delay_flag = true;
 
 	void encapsulate_ipip6_packet(PortConfig *config, char *buf, int buf_len);
 	void decapsulate_ipip6_packet(PortConfig *config, char *buf);

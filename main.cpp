@@ -30,7 +30,7 @@ Tester *tester;
 int num_queues = 1;
 
 // 1Gbps rate is the default
-uint64_t target_rate_bps = 1000 * 1000 * 1000;
+uint64_t target_rate_fps = 1000 * 1000 * 1000;
 
 // size of an mbuf, total size of a packet, headers included
 uint64_t buffer_length = 1024;
@@ -65,13 +65,13 @@ traffic_lcore_thread(void *arg __rte_unused)
 	switch (op_mode)
 	{
 	case TESTER_CONFIG:
-		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
+		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_fps, buffer_length, dslite_test_mode);
 		break;
 	case B4_CONFIG:
-		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
+		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_fps, buffer_length, dslite_test_mode);
 		break;
 	case AFTR_CONFIG:
-		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_bps, buffer_length, dslite_test_mode);
+		dynamic_cast<DSLiteTester*>(tester)->runtest(target_rate_fps, buffer_length, dslite_test_mode);
 		break;
 	}
 
@@ -246,6 +246,8 @@ int main(int argc, char **argv)
 	uint64_t ports_lcore_mask[2];
 	bool mode_selected = false;
 	uint32_t duration = 10; // seconds
+	uint32_t rx_delay = 2;
+	uint32_t tx_delay = 2;
 	bool timestamp_packets = false;
 	test_type_t test_type = TEST_LAT;
 
@@ -279,6 +281,20 @@ int main(int argc, char **argv)
 			duration = (uint32_t)sec;
 		}
 
+		if (argv[i] == string("--rxdelay"))
+		{
+			unsigned long sec;
+			sec = strtoul(argv[i+1], NULL, 10);
+			rx_delay = (uint32_t)sec;
+		}
+		if (argv[i] == string("--txdelay"))
+		{
+			unsigned long sec;
+			sec = strtoul(argv[i+1], NULL, 10);
+			tx_delay = (uint32_t)sec;
+		}
+
+
 		if (argv[i] == string("--num-queues"))
 		{
 			int arg;
@@ -286,11 +302,11 @@ int main(int argc, char **argv)
 			num_queues = arg;
 		}
 
-		if (argv[i] == string("--bps"))
+		if (argv[i] == string("--fps"))
 		{
-			unsigned long long bps;
-			bps = strtoull(argv[i+1], NULL, 10);
-			target_rate_bps = (uint64_t)bps;
+			unsigned long long fps;
+			fps = strtoull(argv[i+1], NULL, 10);
+			target_rate_fps = (uint64_t)fps;
 		}
 
 		if (argv[i] == string("--timestamp-all-packets"))
@@ -383,7 +399,7 @@ int main(int argc, char **argv)
 	// preallocate buffer space for 
 	if (timestamp_packets) {
 		tester->timestamp_packets = timestamp_packets;
-		tester->num_tsc_pairs_per_qp = ((target_rate_bps * 1.25 / (8 * buffer_length)) * duration) / num_queues;
+		tester->num_tsc_pairs_per_qp = (target_rate_fps * 1.25 * duration) / num_queues;
 		tester->port0_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
 		tester->port1_tsc_pairs_array = (struct timestamp_pair **) malloc(num_queues * sizeof(struct timestamp_pair*));
 
@@ -401,7 +417,7 @@ int main(int argc, char **argv)
 	}
 
 	// Spread the bandwith accross the queues
-	target_rate_bps = target_rate_bps / num_queues;
+	target_rate_fps = target_rate_fps / num_queues;
 
 	num_sockets = rte_socket_count();
 	//TODO: Must support more lcores than 64
@@ -430,15 +446,22 @@ int main(int argc, char **argv)
 	}
 
 	tester->set_ports_from_config();
+	tester->tester_duration = duration;
+	tester->m_num_queues = num_queues;
 
 	tx_running = true;
 	rx_running = true;
 
 	rte_eal_mp_remote_launch(traffic_lcore_thread, NULL, SKIP_MASTER);
 
+	// Port needs some extra time before it can actually send, not waiting
+	// may cause an overshoot in throughput
+	usleep(tx_delay * 1000 * 1000);
+	tester->tx_delay_flag = false;
+
 	usleep(duration * 1000 * 1000);
 	tx_running = false;
-	usleep(2 * 1000 * 1000);
+	usleep(rx_delay * 1000 * 1000);
 	rx_running = false;
 
 	RTE_LCORE_FOREACH_SLAVE(lcore_id) {
