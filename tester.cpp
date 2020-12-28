@@ -138,11 +138,13 @@ void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_te
 	int lcore = (int)rte_lcore_id();
 	uint64_t tsc_hz;
 	uint64_t wait_ticks;
-	uint64_t ticks_upper_bound;
 	uint64_t frames_per_burst;
 	int total_rx_queues;
 	uint64_t frames_to_send = (tester_duration * target_rate_fps) / m_num_queues;
-	uint64_t *sent_frames = (uint64_t*) malloc(sizeof(uint64_t) * m_num_queues);
+	uint64_t *port0_sent_frames = (uint64_t*) malloc(sizeof(uint64_t) * m_num_queues);
+	uint64_t *port1_sent_frames = (uint64_t*) malloc(sizeof(uint64_t) * m_num_queues);
+	uint64_t *port0_start_tsc = (uint64_t*)malloc(sizeof(uint64_t) * m_num_queues); // one per queue pair
+	uint64_t *port1_start_tsc = (uint64_t*)malloc(sizeof(uint64_t) * m_num_queues);
 
 	total_rx_queues = port0->rx_queues + port1->rx_queues;
 
@@ -256,12 +258,13 @@ void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_te
 		while(rx_ready_counter.load() < total_rx_queues);
 		while(tx_delay_flag);
 
-		for(sent_frames[queue_num] = 0; sent_frames[queue_num] < frames_to_send; sent_frames[queue_num]++) {
+		port0_start_tsc[queue_num] = rte_rdtsc();
+
+		for(port0_sent_frames[queue_num] = 0; port0_sent_frames[queue_num] < frames_to_send; port0_sent_frames[queue_num]++) {
 			struct rte_mbuf *pktsbuf[TX_BURST];
 			int buffer_idx = 0;
 			int allocated_packets, remaining_packets;
 
-			ticks_upper_bound = rte_get_tsc_cycles() + wait_ticks;
 
 			for (allocated_packets = 0; allocated_packets < TX_BURST; allocated_packets++)
 			{
@@ -308,7 +311,7 @@ void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_te
 			}
 
 			/* Busy loop to keep rate constant */
-			while(rte_rdtsc() < ticks_upper_bound);
+			while(rte_rdtsc() < port0_start_tsc[queue_num] + port0_sent_frames[queue_num] * tsc_hz / target_rate_fps );
 		}
 
 		port0->tx_queue_mutex.lock();
@@ -399,12 +402,12 @@ void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_te
 		while(rx_ready_counter.load() < total_rx_queues);
 		while(tx_delay_flag);
 
-		for(sent_frames[queue_num] = 0; sent_frames[queue_num] < frames_to_send; sent_frames[queue_num]++) {
+		port1_start_tsc[queue_num] = rte_rdtsc();
+
+		for(port1_sent_frames[queue_num] = 0; port1_sent_frames[queue_num] < frames_to_send; port1_sent_frames[queue_num]++) {
 			struct rte_mbuf *pktsbuf[TX_BURST];
 			int buffer_idx = 0;
 			int allocated_packets, remaining_packets;
-
-			ticks_upper_bound = rte_get_tsc_cycles() + wait_ticks;
 
 			for (allocated_packets = 0; allocated_packets < TX_BURST; allocated_packets++)
 			{
@@ -451,7 +454,7 @@ void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_te
 			}
 
 			/* Busy loop to keep rate constant */
-			while(rte_rdtsc() < ticks_upper_bound);
+			while(rte_rdtsc() < port1_start_tsc[queue_num] + port1_sent_frames[queue_num] * tsc_hz / target_rate_fps );
 		}
 
 		port1->tx_queue_mutex.lock();
@@ -459,8 +462,6 @@ void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_te
 		port1->tx_queue_mutex.unlock();
 
 	}
-
-	free(sent_frames);
 }
 
 void DSLiteTester::set_ports_from_config(void)
