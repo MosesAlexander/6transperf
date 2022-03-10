@@ -20,6 +20,9 @@
 #include "port.h"
 #include "tester.h"
 #include "router.h"
+#include <limits>
+
+typedef std::numeric_limits< double > dbl;
 
 using namespace std;
 
@@ -532,6 +535,10 @@ int main(int argc, char **argv)
 	cout<<endl;
 	cout<<"Port 0 dropped frames: "<<port0_drop<<"("<<(100*(double)port0_drop)/(double)total_tx_port1<<"%)"<<endl;
 	cout<<"Port 1 dropped frames: "<<port1_drop<<"("<<(100*(double)port1_drop)/(double)total_tx_port0<<"%)"<<endl;
+	cout.precision(dbl::max_digits10);
+	cout<<"Port 0 elapsed seconds during transmit: "<<tester->port0_elapsed_seconds<<endl;
+	cout<<"Port 1 elapsed seconds during transmit: "<<tester->port1_elapsed_seconds<<endl;
+
 
 	// Calculate Latency, PDV, IPDV
 	double median_port0;

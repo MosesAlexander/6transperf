@@ -66,6 +66,8 @@ public:
 	uint64_t port1_lcore_mask = 0;
 	uint64_t port0_mask = 0;
 	uint64_t port1_mask = 0;
+	double port0_elapsed_seconds = 0;
+	double port1_elapsed_seconds = 0;
 	struct queue_stats *port0_stats;
 	struct queue_stats *port1_stats;
 	uint64_t num_tsc_pairs_per_qp;

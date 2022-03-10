@@ -317,6 +317,8 @@ void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_te
 		port0->tx_queue_mutex.lock();
 		port0->tx_queue_index.push(queue_num);
 		port0->tx_queue_mutex.unlock();
+
+		port0_elapsed_seconds = (double)(rte_rdtsc() - port0_start_tsc[queue_num])/tsc_hz;
 	}
 	if (port1_lcore_rx_mask & (0x1ULL << lcore))
 	{
@@ -460,6 +462,8 @@ void DSLiteTester::runtest(uint64_t target_rate_fps, uint64_t buf_len, dslite_te
 		port1->tx_queue_mutex.lock();
 		port1->tx_queue_index.push(queue_num);
 		port1->tx_queue_mutex.unlock();
+
+		port1_elapsed_seconds = (double)(rte_rdtsc() - port1_start_tsc[queue_num])/tsc_hz;
 
 	}
 }

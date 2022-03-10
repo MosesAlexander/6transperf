@@ -1,14 +1,14 @@
-b4_port0_mac_self=a0:36:9f:13:fe:28
-b4_port1_mac_self=a0:36:9f:13:fe:2a
-b4_port0_mac_peer=a0:36:9f:13:e5:38
-b4_port1_mac_peer=a0:36:9f:13:e5:3a
+tester_port0_mac_self=14:0d:4f:54:8b:17
+tester_port1_mac_self=14:0d:4f:54:8b:18
+tester_port0_mac_peer=14:0d:4f:54:8b:17
+tester_port1_mac_peer=14:0d:4f:54:8b:18
 
-b4_port0_ip_self=200.1.2.3
-b4_port0_ip_dest=168.196.2.1
-b4_port1_ip_self=168.196.2.1
-b4_port1_ip_dest=200.1.2.3
+tester_port0_ip_self=200.1.2.3
+tester_port0_ip_dest=168.196.1.1
+tester_port1_ip_self=168.196.1.1
+tester_port1_ip_dest=200.1.2.3
 
-b4_port0_ip6_self=2001:2:0:0:0:0:0:3
-b4_port0_ip6_dest=2001:2:0:0:0:0:0:2
+tester_port0_ip6_self=2001:2:0:0:0:0:0:3
+tester_port0_ip6_dest=2001:2:0:0:0:0:0:2
 
-b4_port0_tunnel=yes
+tester_port0_tunnel=no

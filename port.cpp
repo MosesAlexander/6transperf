@@ -21,7 +21,7 @@ static struct rte_eth_conf port_conf_default = {
 	.rx_adv_conf = {
 		.rss_conf = {
 			.rss_key = NULL,
-			.rss_hf = ETH_RSS_UDP | ETH_RSS_TCP | ETH_RSS_IPV6 | ETH_RSS_IPV4,
+			.rss_hf = 0x7ef8,
 		},
 	},
 };
